@@ -4,15 +4,27 @@
 
 #define MEMORY_SIZE 4096  // Assuming memory size for simplicity
 
+
+typedef enum {
+    IF, ID, EX, MEM, WB
+} PipelineStage;
+
 typedef struct {
-    int registers[32];  // MIPS has 32 registers, using int to handle negative values
-    unsigned int memory[MEMORY_SIZE];  // Memory array
-    unsigned int pc;  // Program counter
-    unsigned int clock;  // Clock cycles
-    int halt;  // Halt flag
-    unsigned int instruction;  // Current instruction being processed
-    unsigned int opcode, rs, rt, rd;
-    int imm;
+    unsigned int instruction;
+    PipelineStage stage;
+    unsigned int opcode, rs, rt, rd, imm;
+    int result;  // For storing results from execution
+    int writeBackAddr;
+    int memValue;
+} MIPS_Instruction;
+
+typedef struct {
+    int registers[32];
+    unsigned int memory[MEMORY_SIZE];
+    unsigned int pc;
+    unsigned int clock;
+    int halt;
+    MIPS_Instruction pipeline[5];  
     unsigned int writtenMemory[MEMORY_SIZE];
     unsigned int totalInstructions;
     unsigned int arithmeticInstructions;
@@ -20,6 +32,7 @@ typedef struct {
     unsigned int memoryAccessInstructions;
     unsigned int controlTransferInstructions;
 } MIPS_Init;
+
 
 
 void initializeSimulator(MIPS_Init *mips) {
@@ -51,9 +64,11 @@ void loadMemory(char *filename, MIPS_Init *mips) { // Loading all the .txt file 
     fclose(file);
 }
 
+//everything below not finished
 void fetch(MIPS_Init *mips) {
     if (mips->pc / 4 < MEMORY_SIZE && !mips->halt) {
-        mips->instruction = mips->memory[mips->pc / 4]; // Divide by four for memory, PC increments by four so 4/4 is 1 8/4 is 2 etc
+        mips->pipeline[IF].instruction = mips->memory[mips->pc / 4];
+        mips->pipeline[IF].stage = ID;  // Move to decode
         mips->pc += 4; // Increment PC after each fetch
         mips->clock++;  // Clock increment at fetch
     }
