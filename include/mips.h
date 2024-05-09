@@ -8,7 +8,8 @@ typedef enum {
   ID,
   EX,
   MEM,
-  WB
+  WB,
+  DONE
 } PipelineStage;
 
 typedef struct {
@@ -26,7 +27,7 @@ typedef struct {
   unsigned int pc;
   unsigned int clock;
   int halt;
-  MIPS_Instruction pipeline[5];
+  MIPS_Instruction pipeline;
   unsigned int writtenMemory[MEMORY_SIZE];
   unsigned int totalInstructions;
   unsigned int arithmeticInstructions;
@@ -37,10 +38,16 @@ typedef struct {
 
 void initializeSimulator(MIPS_Init *mips);
 void loadMemory(char *filename, MIPS_Init *mips);
-void fetch(MIPS_Init *mips);
-void decode(MIPS_Init *mips);
-void executeInstruction(MIPS_Init *mips);
+void fetch(MIPS_Init *mips, MIPS_Instruction *instr);
+void decode(MIPS_Init *mips, MIPS_Instruction *instr);
+void executeInstruction(MIPS_Init *mips, MIPS_Instruction *instr);
+void memoryAccess(MIPS_Init *mips, MIPS_Instruction *instr);
+void writeBack(MIPS_Init *mips, MIPS_Instruction *instr);
 void printRegisters(MIPS_Init *mips);
 void printMemory(MIPS_Init *mips);
+void controlFlow(MIPS_Instruction *instr, MIPS_Init *mips);
+int performArithmeticOperation(unsigned int opcode, int rsValue, int rtValue, int immValue);
+int performImmediateOperation(unsigned int opcode, int rsValue, int immValue);
+
 
 #endif

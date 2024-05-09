@@ -33,118 +33,168 @@ void loadMemory(char *filename, MIPS_Init *mips) {  // Loading all the .txt file
 }
 
 // everything below not finished
-void fetch(MIPS_Init *mips) {
-  if (mips->pc / 4 < MEMORY_SIZE && !mips->halt) {
-    mips->pipeline[IF].instruction = mips->memory[mips->pc / 4];
-    mips->pipeline[IF].stage = ID;  // Move to decode
-    mips->pc += 4;                  // Increment PC after each fetch
-    mips->clock++;                  // Clock increment at fetch
-  }
+void fetch(MIPS_Init *mips, MIPS_Instruction *instr) {
+    if (mips->pc / 4 < MEMORY_SIZE && !mips->halt) {
+        instr->instruction = mips->memory[mips->pc / 4];
+        instr->stage = ID;  // Move to decode stage
+        mips->pc += 4;  // Increment PC
+    }
 }
 
-void decode(MIPS_Init *mips) {
-  if (!mips->halt) {
-    mips->opcode = (mips->instruction >> 26) & 0x3F;
-    mips->rs = (mips->instruction >> 21) & 0x1F;
-    mips->rt = (mips->instruction >> 16) & 0x1F;
-    mips->rd = (mips->instruction >> 11) & 0x1F;
-    mips->imm = (short)(mips->instruction & 0xFFFF);  // Sign-extension
-    mips->clock++;
-  }
+
+
+void decode(MIPS_Init *mips, MIPS_Instruction *instr) {
+    instr->opcode = (instr->instruction >> 26) & 0x3F;
+    instr->rs = (instr->instruction >> 21) & 0x1F;
+    instr->rt = (instr->instruction >> 16) & 0x1F;
+    instr->rd = (instr->instruction >> 11) & 0x1F;
+    instr->imm = (short)(instr->instruction & 0xFFFF);  // Sign-extension
 }
-void executeInstruction(MIPS_Init *mips) {
-  if (mips->halt) return;
-  int memValue = 0;
-  int writeBackAddr = -1;
-  mips->totalInstructions++;  // Increment total instructions counter
 
-  switch (mips->opcode) {
-    case 0x00:  // ADD
-      mips->registers[mips->rd] = mips->registers[mips->rs] + mips->registers[mips->rt];
-      mips->arithmeticInstructions++;
-      break;
-    case 0x01:  // ADDI
-      mips->registers[mips->rt] = mips->registers[mips->rs] + mips->imm;
-      mips->arithmeticInstructions++;
-      break;
-    case 0x02:  // SUB
-      mips->registers[mips->rd] = mips->registers[mips->rs] - mips->registers[mips->rt];
-      mips->arithmeticInstructions++;
-      break;
-    case 0x03:  // SUBI
-      mips->registers[mips->rt] = mips->registers[mips->rs] - mips->imm;
-      mips->arithmeticInstructions++;
-      break;
-    case 0x04:  // MUL
-      mips->registers[mips->rd] = mips->registers[mips->rs] * mips->registers[mips->rt];
-      mips->arithmeticInstructions++;
-      break;
-    case 0x05:  // MULI
-      mips->registers[mips->rt] = mips->registers[mips->rs] * mips->imm;
-      mips->arithmeticInstructions++;
-      break;
-    case 0x06:  // OR
-      mips->registers[mips->rd] = mips->registers[mips->rs] | mips->registers[mips->rt];
-      mips->logicalInstructions++;
-      break;
-    case 0x07:  // ORI
-      mips->registers[mips->rt] = mips->registers[mips->rs] | mips->imm;
-      mips->logicalInstructions++;
-      break;
-    case 0x08:  // AND
-      mips->registers[mips->rd] = mips->registers[mips->rs] & mips->registers[mips->rt];
-      mips->logicalInstructions++;
-      break;
-    case 0x09:  // ANDI
-      mips->registers[mips->rt] = mips->registers[mips->rs] & mips->imm;
-      mips->logicalInstructions++;
-      break;
-    case 0x0A:  // XOR
-      mips->registers[mips->rd] = mips->registers[mips->rs] ^ mips->registers[mips->rt];
-      mips->logicalInstructions++;
-      break;
-    case 0x0B:  // XORI
-      mips->registers[mips->rt] = mips->registers[mips->rs] ^ mips->imm;
-      mips->logicalInstructions++;
-      break;
-    case 0x0C:                                                               // LDW
-      memValue = mips->memory[(mips->registers[mips->rs] + mips->imm) / 4];  // This is weird because if you remove the "/4" STW won't work :/
-      writeBackAddr = mips->rt;
-      mips->memoryAccessInstructions++;
-      break;
-    case 0x0D:                                                                                                             // STW
-      printf("STW: Storing %u at memory index %u\n", mips->registers[mips->rt], (mips->registers[mips->rs] + mips->imm));  // Debug print
-      mips->writtenMemory[(mips->registers[mips->rs] + mips->imm)] = 1;
-      mips->memory[(mips->registers[mips->rs] + mips->imm)] = mips->registers[mips->rt];
-      mips->memoryAccessInstructions++;
-      break;
 
-    case 0x0E:  // BZ
-      mips->controlTransferInstructions++;
-      if (mips->registers[mips->rs] == 0) mips->pc = mips->pc + 4 * mips->imm - 4;
-      break;
-    case 0x0F:  // BEQ
-      mips->controlTransferInstructions++;
-      if (mips->registers[mips->rs] == mips->registers[mips->rt]) mips->pc = mips->pc + 4 * mips->imm - 4;
-      break;
-    case 0x10:  // JR
-      mips->controlTransferInstructions++;
-      mips->pc = mips->registers[mips->rs];
-      break;
-    case 0x11:  // HALT
-      mips->controlTransferInstructions++;
-      mips->halt = 1;  // Set halt flag to stop simulation
-      return;
-    default:
-      printf("Unknown opcode: %u\n", mips->opcode);
-  }
+void executeInstruction(MIPS_Init *mips, MIPS_Instruction *instr) {
+    if (mips->halt) return;
+    int memValue = 0;
+    int writeBackAddr = -1;
 
-  if (writeBackAddr != -1) {  // Write-back operation for LDW, not sure if this is how we implement it
+    mips->totalInstructions++;  // Increment total instructions counter
 
-    mips->registers[writeBackAddr] = memValue;
-  }
-  mips->clock++;
+    switch (instr->opcode) {
+        case 0x00:  // ADD
+        case 0x02:  // SUB
+        case 0x04:  // MUL
+        case 0x06:  // OR
+        case 0x08:  // AND
+        case 0x0A:  // XOR
+            // Execute the operation
+            instr->result = performArithmeticOperation(instr->opcode, mips->registers[instr->rs], mips->registers[instr->rt], instr->imm);
+            writeBackAddr = instr->rd;
+            instr->stage = WB;  // Move directly to Write Back
+            break;
+
+        case 0x01:  // ADDI
+        case 0x03:  // SUBI
+        case 0x05:  // MULI
+        case 0x07:  // ORI
+        case 0x09:  // ANDI
+        case 0x0B:  // XORI
+            // Immediate versions also go directly to Write Back
+            instr->result = performImmediateOperation(instr->opcode, mips->registers[instr->rs], instr->imm);
+            
+            writeBackAddr = instr->rt;
+            instr->stage = WB;
+            break;
+
+        case 0x0C:  // LDW
+            memValue = mips->memory[(mips->registers[instr->rs] + instr->imm) / 4];
+            instr->result = memValue;
+            writeBackAddr = instr->rt;
+            instr->stage = MEM;  // Proceed to Memory Access
+            break;
+
+        case 0x0D:  // STW
+            mips->memory[(mips->registers[instr->rs] + instr->imm) / 4] = mips->registers[instr->rt];
+            instr->stage = MEM;  // Proceed to Memory Access
+            break;
+
+        case 0x0E:  // BZ
+        case 0x0F:  // BEQ
+        case 0x10:  // JR
+            // Control instructions adjust the PC and bypass MEM and WB stages
+            controlFlow(instr, mips);
+            instr->stage = DONE;  // Mark as done
+            break;
+
+        case 0x11:  // HALT
+            mips->halt = 1;  // Set halt flag to stop simulation
+            instr->stage = DONE;
+            return;
+
+        default:
+            printf("Unknown opcode: %u\n", instr->opcode);
+            instr->stage = DONE;
+    }
+
+    if (writeBackAddr != -1 && instr->stage == WB) {  // If in Write Back stage
+        mips->registers[writeBackAddr] = instr->result;
+        instr->stage = DONE;  // After Write Back, mark as done
+    }
+
 }
+
+int performArithmeticOperation(unsigned int opcode, int rsValue, int rtValue, int immValue) {
+    switch (opcode) {
+        case 0x00:  // ADD
+            return rsValue + rtValue;
+        case 0x02:  // SUB
+            return rsValue - rtValue;
+        case 0x04:  // MUL
+            return rsValue * rtValue;
+        case 0x06:  // OR
+            return rsValue | rtValue;
+        case 0x08:  // AND
+            return rsValue & rtValue;
+        case 0x0A:  // XOR
+            return rsValue ^ rtValue;
+        default:
+            printf("Invalid arithmetic opcode: %u\n", opcode);
+            return 0;  // Error case
+    }
+}
+int performImmediateOperation(unsigned int opcode, int rsValue, int immValue) {
+    switch (opcode) {
+        case 0x01:  // ADDI
+            return rsValue + immValue;
+        case 0x03:  // SUBI
+            return rsValue - immValue;
+        case 0x05:  // MULI
+            return rsValue * immValue;
+        case 0x07:  // ORI
+            return rsValue | immValue;
+        case 0x09:  // ANDI
+            return rsValue & immValue;
+        case 0x0B:  // XORI
+            return rsValue ^ immValue;
+        default:
+            printf("Invalid immediate opcode: %u\n", opcode);
+            return 0;  // Error case
+    }
+}
+
+void controlFlow(MIPS_Instruction *instr, MIPS_Init *mips) {
+    switch (instr->opcode) {
+        case 0x0E:  // BZ (Branch if Zero)
+            if (mips->registers[instr->rs] == 0)
+                mips->pc += 4 * instr->imm - 4;  // Branching adjusts PC relative to current PC
+            break;
+        case 0x0F:  // BEQ (Branch if Equal)
+            if (mips->registers[instr->rs] == mips->registers[instr->rt])
+                mips->pc += 4 * instr->imm - 4;
+            break;
+        case 0x10:  // JR (Jump Register)
+            mips->pc = mips->registers[instr->rs];
+            break;
+        default:
+            printf("Invalid control flow opcode: %u\n", instr->opcode);
+    }
+}
+void memoryAccess(MIPS_Init *mips, MIPS_Instruction *instr) {
+    if (instr->opcode == 0x0C) {  // LDW
+        instr->result = mips->memory[(mips->registers[instr->rs] + instr->imm) / 4];
+    } else if (instr->opcode == 0x0D) {  // STW
+        mips->memory[(mips->registers[instr->rs] + instr->imm) / 4] = mips->registers[instr->rt];
+    }
+}
+
+void writeBack(MIPS_Init *mips, MIPS_Instruction *instr) {
+    if (instr->stage == WB) {
+        if (instr->opcode == 0x0C || (instr->opcode >= 0x00 && instr->opcode <= 0x0B)) {
+            mips->registers[instr->rd] = instr->result;
+        }
+    }
+}
+
+
 void printRegisters(MIPS_Init *mips) {
   printf("Register Values:\n");
   for (int i = 0; i < 32; i++) {

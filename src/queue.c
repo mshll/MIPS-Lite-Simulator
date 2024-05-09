@@ -1,71 +1,102 @@
 #include "queue.h"
+#include "mips.h"
 
-// Function to initialize the queue
+const MIPS_Instruction MIPS_INVALID_INSTR = {0};
+
 void init_queue(Queue *q) {
-  q->front = 0;
-  q->rear = -1;
-  q->size = 0;
+    q->front = 0;
+    q->rear = -1;
+    q->size = 0;
 }
 
-// Function to check if the queue is empty
-bool is_queue_empty(Queue *q) {
-  return q->size == 0;
+bool is_queue_empty(const Queue *q) {
+    return q->size == 0;
 }
 
-// Function to check if the queue is full
 bool is_queue_full(Queue *q) {
-  return q->size == QUEUE_SIZE;
+    return q->size == QUEUE_SIZE;
 }
 
-// Function to add an element to the back of the queue
-bool enqueue(Queue *q, int element) {
-  if (is_queue_full(q)) {
-    return false;
-  }
-  q->rear = (q->rear + 1) % QUEUE_SIZE;
-  q->items[q->rear] = element;
-  q->size++;
-  return true;
+bool enqueue(Queue *q, MIPS_Instruction element) {
+    if (is_queue_full(q)) {
+        return false;
+    }
+    q->rear = (q->rear + 1) % QUEUE_SIZE;
+    q->items[q->rear] = element;
+    q->size++;
+    return true;
 }
 
-// Function to remove an element from the front of the queue
-int dequeue(Queue *q) {
-  if (is_queue_empty(q)) {
-    printf("Queue is empty!\n");
-    return -1;
-  }
-  int item = q->items[q->front];
-  q->front = (q->front + 1) % QUEUE_SIZE;
-  q->size--;
-  return item;
+MIPS_Instruction dequeue(Queue *q) {
+    if (is_queue_empty(q)) {
+        return MIPS_INVALID_INSTR;
+    }
+    MIPS_Instruction item = q->items[q->front];
+    q->front = (q->front + 1) % QUEUE_SIZE;
+    q->size--;
+    return item;
 }
 
-// Function to get the current size of the queue
 int queue_size(Queue *q) {
-  return q->size;
+    return q->size;
 }
 
-// Function to return the front element of the queue without removing it
-int peek(Queue *q) {
-  if (is_queue_empty(q)) {
-    printf("Queue is empty!\n");
-    return -1;
-  }
-  return q->items[q->front];
+MIPS_Instruction peek(const Queue *q) {
+    if (is_queue_empty(q)) {
+        return MIPS_INVALID_INSTR;
+    }
+    return q->items[q->front];
 }
 
-// Function to print all elements in the queue
-void print_queue(Queue *q) {
-  if (is_queue_empty(q)) {
-    printf("Queue is empty!\n");
-    return;
-  }
-  int count = q->size;
-  int index = q->front;
-  printf("Queue elements: ");
-  while (count--) {
-    printf("%d ", q->items[index]);
-    index = (index + 1) % QUEUE_SIZE;
-  }
-  printf("\n");
+MIPS_Instruction peekAt(const Queue *q, int index) {
+    if (index < 0 || index >= q->size) {
+        return MIPS_INVALID_INSTR;
+    }
+    int realIndex = (q->front + index) % QUEUE_SIZE;
+    return q->items[realIndex];
+}
+
+void processQueue(Queue *q, MIPS_Init *mips) {
+    int numProcessed = q->size;
+    for (int i = 0; i < numProcessed; i++) {
+        int index = (q->front + i) % QUEUE_SIZE;
+        MIPS_Instruction *instr = &q->items[index];
+        switch (instr->stage) {
+            case IF:
+                fetch(mips, instr);
+                instr->stage = ID;
+                break;
+            case ID:
+                decode(mips, instr);
+                instr->stage = EX;
+                break;
+            case EX:
+                executeInstruction(mips, instr);
+                instr->stage = MEM;
+                break;
+            case MEM:
+                memoryAccess(mips, instr);
+                instr->stage = WB;
+                break;
+            case WB:
+                writeBack(mips, instr);
+                instr->stage = DONE;
+                break;
+            case DONE:
+                break;
+        }
+    }
+    while (!is_queue_empty(q) && q->items[q->front].stage == DONE) {
+        dequeue(q);
+    }
+    mips->clock++;
+}
+
+void print_queue(const Queue *q) {
+    printf("Queue Contents:\n");
+    for (int i = 0; i < q->size; i++) {
+        int index = (q->front + i) % QUEUE_SIZE;
+        printf("%d ", q->items[index].opcode);  // Assuming `opcode` is an integer member of MIPS_Instruction
+    }
+    printf("\n");
 }

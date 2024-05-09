@@ -1,16 +1,23 @@
 #include <stdio.h>
 #include "mips.h"
+#include "queue.h"
 
 int main() {
   MIPS_Init mips;
   initializeSimulator(&mips);
   loadMemory("memory_image.txt", &mips);
-
+  Queue q;
+  init_queue(&q);
   while (!mips.halt) {
-    fetch(&mips);
-    decode(&mips);
-    executeInstruction(&mips);
-  }
+    if (!is_queue_full(&q) && mips.pc / 4 < MEMORY_SIZE) {
+        MIPS_Instruction newInst;
+        newInst.instruction = mips.memory[mips.pc / 4];  // Load the instruction
+        enqueue(&q, newInst);  // Enqueue with initial fetch stage
+
+    }
+    processQueue(&q, &mips);  // Process all instructions in the queue
+}
+
 
   printf("Simulation completed in %u clock cycles.\n", mips.clock);
   printf("Final PC: %u\n", mips.pc);  // Print the final PC value
