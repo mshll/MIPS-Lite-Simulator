@@ -1,6 +1,6 @@
 #ifndef _MIPS_H_
 #define _MIPS_H_
-
+#include "queue.h"
 #define MEMORY_SIZE 4096  // Assuming memory size for simplicity
 
 typedef enum {
@@ -48,6 +48,6 @@ void printMemory(MIPS_Init *mips);
 void controlFlow(MIPS_Instruction *instr, MIPS_Init *mips);
 int performArithmeticOperation(unsigned int opcode, int rsValue, int rtValue, int immValue);
 int performImmediateOperation(unsigned int opcode, int rsValue, int immValue);
-
+void processQueue(Queue *q, MIPS_Init *mips);
 
 #endif

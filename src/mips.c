@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "queue.h"
 
 void initializeSimulator(MIPS_Init *mips) {
   memset(mips->registers, 0, sizeof(mips->registers));          // memset() sets all registers to zero
@@ -194,6 +195,41 @@ void writeBack(MIPS_Init *mips, MIPS_Instruction *instr) {
     }
 }
 
+void processQueue(Queue *q, MIPS_Init *mips) {
+    int numProcessed = q->size;
+    for (int i = 0; i < numProcessed; i++) {
+        int index = (q->front + i) % QUEUE_SIZE;
+        MIPS_Instruction *instr = q->items[index];
+        switch (instr->stage) {
+            case IF:
+                fetch(mips, instr);
+                instr->stage = ID;
+                break;
+            case ID:
+                decode(mips, instr);
+                instr->stage = EX;
+                break;
+            case EX:
+                executeInstruction(mips, instr);
+                instr->stage = MEM;
+                break;
+            case MEM:
+                memoryAccess(mips, instr);
+                instr->stage = WB;
+                break;
+            case WB:
+                writeBack(mips, instr);
+                instr->stage = DONE;
+                break;
+            case DONE:
+                MIPS_Instruction* item = dequeue(q);
+                free(item);
+                break;
+        }
+    }
+
+    mips->clock++;
+}
 
 void printRegisters(MIPS_Init *mips) {
   printf("Register Values:\n");
