@@ -1,27 +1,35 @@
-#include "mips.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "queue.h"
+/**
+ * @file  mips.c
+ * @copyright Copyright (c) 2024
+ */
 
-void initializeSimulator(MIPS_Init *mips) {
-  memset(mips->registers, 0, sizeof(mips->registers));          // memset() sets all registers to zero
-  memset(mips->memory, 0, sizeof(mips->memory));                // memset() sets all memory to zero
-  memset(mips->writtenMemory, 0, sizeof(mips->writtenMemory));  // setting the flags for our array
-  mips->pc = 0;                                                 // Initializing PC
-  mips->clock = 0;                                              // Initializing clock
-  mips->halt = 0;                                               // // Initializing halt flag to zero
-  mips->totalInstructions = 0;                                  // Initializing total instruction counter to zero
-  mips->arithmeticInstructions = 0;                             // Initializing artithmetic instruction counter to zero
-  mips->logicalInstructions = 0;                                // Initializing logical instruction counter to zero
-  mips->memoryAccessInstructions = 0;                           // Initializing memory instruction counter to zero
-  mips->controlTransferInstructions = 0;                        // Initializing trnsfer instruction counter to zero
+#include "mips.h"
+#include "common.h"
+#include "pipeline.h"
+
+void init_simulator(MIPSSim *mips) {
+  memset(mips, 0, sizeof(MIPSSim));
+  memset(mips->registers, 0, sizeof(mips->registers));
+  memset(mips->memory, 0, sizeof(mips->memory));
+  mips->memory_size = 0;
+  mips->pc = 0;
+  mips->clock = 0;
+  mips->halt = false;
+  mips->counts = (InstructionCount){0};
+  init_pipeline(&mips->pipeline);
+
+  log_registers(mips);
 }
 
-void loadMemory(char *filename, MIPS_Init *mips) {  // Loading all the .txt file to memory, not sure if thats right?
-  FILE *file = fopen(filename, "r");                // Error handling
+void destroy_simulator(MIPSSim *mips) {
+  free(mips);
+}
+
+void load_memory(MIPSSim *mips, char *filename) {
+  FILE *file = fopen(filename, "r");
   if (!file) {
     perror("Failed to open file");
+    exit(1);
     return;
   }
   char line[10];
@@ -31,220 +39,268 @@ void loadMemory(char *filename, MIPS_Init *mips) {  // Loading all the .txt file
     i++;
   }
   fclose(file);
+  mips->memory_size = i;
+  LOG("Memory loaded from file: %s\n", filename);
+  log_memory(mips);
 }
 
-// everything below not finished
-void fetch(MIPS_Init *mips, MIPS_Instruction *instr) {
-    if (mips->pc / 4 < MEMORY_SIZE && !mips->halt) {
-        instr->instruction = mips->memory[mips->pc / 4];
-        instr->stage = ID;  // Move to decode stage
-        mips->pc += 4;  // Increment PC
-    }
-}
-
-
-
-void decode(MIPS_Init *mips, MIPS_Instruction *instr) {
-    instr->opcode = (instr->instruction >> 26) & 0x3F;
-    instr->rs = (instr->instruction >> 21) & 0x1F;
-    instr->rt = (instr->instruction >> 16) & 0x1F;
-    instr->rd = (instr->instruction >> 11) & 0x1F;
-    instr->imm = (short)(instr->instruction & 0xFFFF);  // Sign-extension
-}
-
-
-void executeInstruction(MIPS_Init *mips, MIPS_Instruction *instr) {
-    if (mips->halt) return;
-    int memValue = 0;
-    int writeBackAddr = -1;
-
-    mips->totalInstructions++;  // Increment total instructions counter
-
-    switch (instr->opcode) {
-        case 0x00:  // ADD
-        case 0x02:  // SUB
-        case 0x04:  // MUL
-        case 0x06:  // OR
-        case 0x08:  // AND
-        case 0x0A:  // XOR
-            // Execute the operation
-            instr->result = performArithmeticOperation(instr->opcode, mips->registers[instr->rs], mips->registers[instr->rt], instr->imm);
-            writeBackAddr = instr->rd;
-            instr->stage = WB;  // Move directly to Write Back
-            break;
-
-        case 0x01:  // ADDI
-        case 0x03:  // SUBI
-        case 0x05:  // MULI
-        case 0x07:  // ORI
-        case 0x09:  // ANDI
-        case 0x0B:  // XORI
-            // Immediate versions also go directly to Write Back
-            instr->result = performImmediateOperation(instr->opcode, mips->registers[instr->rs], instr->imm);
-            
-            writeBackAddr = instr->rt;
-            instr->stage = WB;
-            break;
-
-        case 0x0C:  // LDW
-            memValue = mips->memory[(mips->registers[instr->rs] + instr->imm) / 4];
-            instr->result = memValue;
-            writeBackAddr = instr->rt;
-            instr->stage = MEM;  // Proceed to Memory Access
-            break;
-
-        case 0x0D:  // STW
-            mips->memory[(mips->registers[instr->rs] + instr->imm) / 4] = mips->registers[instr->rt];
-            instr->stage = MEM;  // Proceed to Memory Access
-            break;
-
-        case 0x0E:  // BZ
-        case 0x0F:  // BEQ
-        case 0x10:  // JR
-            // Control instructions adjust the PC and bypass MEM and WB stages
-            controlFlow(instr, mips);
-            instr->stage = DONE;  // Mark as done
-            break;
-
-        case 0x11:  // HALT
-            mips->halt = 1;  // Set halt flag to stop simulation
-            instr->stage = DONE;
-            return;
-
-        default:
-            printf("Unknown opcode: %u\n", instr->opcode);
-            instr->stage = DONE;
-    }
-
-    if (writeBackAddr != -1 && instr->stage == WB) {  // If in Write Back stage
-        mips->registers[writeBackAddr] = instr->result;
-        instr->stage = DONE;  // After Write Back, mark as done
-    }
-
-}
-
-int performArithmeticOperation(unsigned int opcode, int rsValue, int rtValue, int immValue) {
-    switch (opcode) {
-        case 0x00:  // ADD
-            return rsValue + rtValue;
-        case 0x02:  // SUB
-            return rsValue - rtValue;
-        case 0x04:  // MUL
-            return rsValue * rtValue;
-        case 0x06:  // OR
-            return rsValue | rtValue;
-        case 0x08:  // AND
-            return rsValue & rtValue;
-        case 0x0A:  // XOR
-            return rsValue ^ rtValue;
-        default:
-            printf("Invalid arithmetic opcode: %u\n", opcode);
-            return 0;  // Error case
-    }
-}
-int performImmediateOperation(unsigned int opcode, int rsValue, int immValue) {
-    switch (opcode) {
-        case 0x01:  // ADDI
-            return rsValue + immValue;
-        case 0x03:  // SUBI
-            return rsValue - immValue;
-        case 0x05:  // MULI
-            return rsValue * immValue;
-        case 0x07:  // ORI
-            return rsValue | immValue;
-        case 0x09:  // ANDI
-            return rsValue & immValue;
-        case 0x0B:  // XORI
-            return rsValue ^ immValue;
-        default:
-            printf("Invalid immediate opcode: %u\n", opcode);
-            return 0;  // Error case
-    }
-}
-
-void controlFlow(MIPS_Instruction *instr, MIPS_Init *mips) {
-    switch (instr->opcode) {
-        case 0x0E:  // BZ (Branch if Zero)
-            if (mips->registers[instr->rs] == 0)
-                mips->pc += 4 * instr->imm - 4;  // Branching adjusts PC relative to current PC
-            break;
-        case 0x0F:  // BEQ (Branch if Equal)
-            if (mips->registers[instr->rs] == mips->registers[instr->rt])
-                mips->pc += 4 * instr->imm - 4;
-            break;
-        case 0x10:  // JR (Jump Register)
-            mips->pc = mips->registers[instr->rs];
-            break;
-        default:
-            printf("Invalid control flow opcode: %u\n", instr->opcode);
-    }
-}
-void memoryAccess(MIPS_Init *mips, MIPS_Instruction *instr) {
-    if (instr->opcode == 0x0C) {  // LDW
-        instr->result = mips->memory[(mips->registers[instr->rs] + instr->imm) / 4];
-    } else if (instr->opcode == 0x0D) {  // STW
-        mips->memory[(mips->registers[instr->rs] + instr->imm) / 4] = mips->registers[instr->rt];
-    }
-}
-
-void writeBack(MIPS_Init *mips, MIPS_Instruction *instr) {
-    if (instr->stage == WB) {
-        if (instr->opcode == 0x0C || (instr->opcode >= 0x00 && instr->opcode <= 0x0B)) {
-            mips->registers[instr->rd] = instr->result;
-        }
-    }
-}
-
-void processQueue(Queue *q, MIPS_Init *mips) {
-    int numProcessed = q->size;
-    for (int i = 0; i < numProcessed; i++) {
-        int index = (q->front + i) % QUEUE_SIZE;
-        MIPS_Instruction *instr = q->items[index];
-        switch (instr->stage) {
-            case IF:
-                fetch(mips, instr);
-                instr->stage = ID;
-                break;
-            case ID:
-                decode(mips, instr);
-                instr->stage = EX;
-                break;
-            case EX:
-                executeInstruction(mips, instr);
-                instr->stage = MEM;
-                break;
-            case MEM:
-                memoryAccess(mips, instr);
-                instr->stage = WB;
-                break;
-            case WB:
-                writeBack(mips, instr);
-                instr->stage = DONE;
-                break;
-            case DONE:
-                MIPS_Instruction* item = dequeue(q);
-                free(item);
-                break;
-        }
-    }
-
-    mips->clock++;
-}
-
-void printRegisters(MIPS_Init *mips) {
-  printf("Register Values:\n");
-  for (int i = 0; i < 32; i++) {
-    if (mips->registers[i] != 0) {  // Only print non-zero registers to minimize clutter
-      printf("R%d: %d\n", i, mips->registers[i]);
-    }
+void fetch_stage(MIPSSim *mips) {
+  if (peek_pipeline_stage(&mips->pipeline, IF) == NULL && (mips->pc / 4 < mips->memory_size)) {
+    Instruction *instr = (Instruction *)malloc(sizeof(Instruction));
+    memset(instr, 0, sizeof(Instruction));
+    instr->instruction = mips->memory[mips->pc / 4];
+    instr->stage = IF;
+    fetch_instruction(&mips->pipeline, instr);
+    mips->pc += 4;
+    // LOG("Instruction fetched: %08x\n", instr->instruction);
   }
 }
 
-void printMemory(MIPS_Init *mips) {
-  printf("Written Memory Contents:\n");
-  for (int i = 0; i < MEMORY_SIZE; i++) {
-    if (mips->writtenMemory[i]) {  // Only print memory cells that have been written to
-      printf("Memory[%d]: %u\n", i, mips->memory[i]);
+void decode_stage(MIPSSim *mips) {
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, ID);
+  if (instr == NULL || instr->stage != ID) {
+    return;
+  }
+
+  instr->opcode = (instr->instruction >> 26) & INSTR_MASK;
+
+  switch (instr->opcode) {
+    case ADD:
+    case SUB:
+    case MUL:
+    case OR:
+    case AND:
+    case XOR:
+      instr->type = R_TYPE;
+      break;
+    case ADDI:
+    case SUBI:
+    case MULI:
+    case ORI:
+    case ANDI:
+    case XORI:
+      instr->type = I_TYPE_IMM;
+      break;
+    case LDW:
+    case STW:
+      instr->type = I_TYPE_MEM;
+      break;
+    case HALT:
+    case BZ:
+    case BEQ:
+    case JR:
+      instr->type = J_TYPE;
+      break;
+    default:
+      fprintf(stderr, "Invalid opcode: %08x\n", instr->instruction);
+      exit(1);
+      break;
+  }
+
+  instr->rs = (instr->instruction >> 21) & INSTR_MASK;
+  instr->rt = (instr->instruction >> 16) & INSTR_MASK;
+
+  if (instr->type == R_TYPE) {
+    instr->rd = (instr->instruction >> 11) & INSTR_MASK;
+  } else {
+    instr->imm = (int16_t)(instr->instruction & 0xFFFF);
+    instr->alu_out = mips->pc + (instr->imm << 2);
+  }
+
+  LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
+      instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
+}
+
+uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode) {
+  // LOG("Performing operation: %d (%d) %d\n", rs, opcode, rt);
+  switch (opcode) {
+    case ADD:
+    case ADDI:
+      return rs + rt;
+    case SUB:
+    case SUBI:
+      return rs - rt;
+    case MUL:
+    case MULI:
+      return rs * rt;
+    case OR:
+    case ORI:
+      return rs | rt;
+    case AND:
+    case ANDI:
+      return rs & rt;
+    case XOR:
+    case XORI:
+      return rs ^ rt;
+    default:
+      return 0;
+  }
+}
+
+bool control_flow(MIPSSim *mips, Instruction *instr) {
+  switch (instr->opcode) {
+    case BZ:
+      if (mips->registers[instr->rs] == 0) {
+        mips->pc = instr->alu_out - 4;
+        return true;
+      }
+      break;
+    case BEQ:
+      if (mips->registers[instr->rs] == mips->registers[instr->rt]) {
+        mips->pc = instr->alu_out - 4;
+        return true;
+      }
+      break;
+    case JR:
+      mips->pc = mips->registers[instr->rs];
+      return true;
+    case HALT:
+      mips->halt = true;
+      instr->stage = DONE;
+      return true;
+    default:
+      break;
+  }
+  return false;
+}
+
+void execute_stage(MIPSSim *mips) {
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, EX);
+  if (instr == NULL || instr->stage != EX) {
+    return;
+  }
+
+  uint32_t rs = mips->registers[instr->rs];
+  uint32_t rt = mips->registers[instr->rt];
+
+  switch (instr->type) {
+    case R_TYPE:
+      instr->alu_out = perform_operation(rs, rt, instr->opcode);
+      break;
+    case I_TYPE_IMM:
+      instr->alu_out = perform_operation(rs, instr->imm, instr->opcode);
+      break;
+    case I_TYPE_MEM:
+      instr->alu_out = mips->registers[instr->rs] + instr->imm;
+      break;
+    case J_TYPE:
+      bool branch_taken = control_flow(mips, instr);
+      instr->stage = DONE;
+      // if branch taken, point upstream instructions to NOP
+      if (branch_taken) {
+        for (int i = 0; i < EX; i++) {
+          Instruction *upstream = peek_pipeline_stage(&mips->pipeline, i);
+          if (upstream != NULL) {
+            upstream->stage = DONE;
+          }
+        }
+      }
+      break;
+    default:
+      break;
+  }
+
+  // Increment instruction counts
+  mips->counts.total++;
+  if (instr->opcode >= ADD && instr->opcode <= MULI) {
+    mips->counts.arithmetic++;
+  } else if (instr->opcode >= OR && instr->opcode <= XORI) {
+    mips->counts.logical++;
+  } else if (instr->opcode == LDW || instr->opcode == STW) {
+    mips->counts.memory++;
+  } else {
+    mips->counts.control++;
+  }
+}
+
+void memory_stage(MIPSSim *mips) {
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, MEM);
+  if (instr == NULL || instr->stage != MEM) {
+    return;
+  }
+
+  switch (instr->type) {
+    case R_TYPE:
+      mips->registers[instr->rd] = instr->alu_out;
+      instr->stage = DONE;
+      break;
+    case I_TYPE_IMM:
+      mips->registers[instr->rt] = instr->alu_out;
+      instr->stage = DONE;
+      break;
+    case I_TYPE_MEM:
+      if (instr->opcode == LDW) {
+        instr->mdr = mips->memory[instr->alu_out / 4];
+      } else if (instr->opcode == STW) {
+        mips->memory[instr->alu_out / 4] = mips->registers[instr->rt];
+        instr->stage = DONE;
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+void writeback_stage(MIPSSim *mips) {
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, WB);
+  if (instr == NULL || instr->stage != WB) {
+    return;
+  }
+
+  if (instr->type == I_TYPE_MEM) {
+    mips->registers[instr->rt] = instr->mdr;
+  }
+}
+
+void process(MIPSSim *mips) {
+  LOG("-> CLK: %d, PC: %d\n", mips->clock, mips->pc);
+  writeback_stage(mips);
+  memory_stage(mips);
+  execute_stage(mips);
+  if (mips->halt) return;
+  decode_stage(mips);
+  fetch_stage(mips);
+  print_pipeline_state(&mips->pipeline);
+  advance_pipeline(&mips->pipeline);
+  mips->clock++;
+}
+
+void log_memory(MIPSSim *mips) {
+  LOG("Memory:\n");
+  uint8_t k = 0;
+  for (int i = 0; i < mips->memory_size; i++) {
+    if (mips->memory[i] != 0) {
+      if (k % 8 == 0 && k != 0) {
+        LOG("\n");
+      }
+      LOG("[%4d:%08X] ", i * 4, mips->memory[i]);
+      k++;
+    }
+  }
+  LOG("\n");
+}
+
+void log_registers(MIPSSim *mips) {
+  LOG("Registers:\n");
+  uint8_t k = 0;
+  for (int i = 0; i < 32; i++) {
+    if (mips->registers[i] != 0) {
+      if (k % 4 == 0 && k != 0) {
+        LOG("\n");
+      }
+      LOG("[%2d:%4d] ", i, mips->registers[i]);
+      k++;
+    }
+  }
+  LOG("\n");
+}
+
+void adjust_pc(MIPSSim *mips) {
+  for (int i = 0; i < EX; i++) {
+    Instruction *instr = peek_pipeline_stage(&mips->pipeline, i);
+    if (instr != NULL) {
+      mips->pc -= 4;
+      break;
     }
   }
 }

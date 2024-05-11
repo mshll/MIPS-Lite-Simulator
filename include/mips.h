@@ -1,53 +1,48 @@
+/**
+ * @file  mips.h
+ * @copyright Copyright (c) 2024
+ */
+
 #ifndef _MIPS_H_
 #define _MIPS_H_
-#include "queue.h"
-#define MEMORY_SIZE 4096  // Assuming memory size for simplicity
 
-typedef enum {
-  IF,
-  ID,
-  EX,
-  MEM,
-  WB,
-  DONE
-} PipelineStage;
+#include "common.h"
+#include "pipeline.h"
 
 typedef struct {
-  unsigned int instruction;
-  PipelineStage stage;
-  unsigned int opcode, rs, rt, rd, imm;
-  int result;  // For storing results from execution
-  int writeBackAddr;
-  int memValue;
-} MIPS_Instruction;
+  uint32_t total;
+  uint32_t arithmetic;
+  uint32_t logical;
+  uint32_t memory;
+  uint32_t control;
+} InstructionCount;
 
 typedef struct {
-  int registers[32];
-  unsigned int memory[MEMORY_SIZE];
-  unsigned int pc;
-  unsigned int clock;
-  int halt;
-  MIPS_Instruction pipeline;
-  unsigned int writtenMemory[MEMORY_SIZE];
-  unsigned int totalInstructions;
-  unsigned int arithmeticInstructions;
-  unsigned int logicalInstructions;
-  unsigned int memoryAccessInstructions;
-  unsigned int controlTransferInstructions;
-} MIPS_Init;
+  uint32_t registers[32];
+  uint32_t memory[MEMORY_SIZE];
+  uint32_t memory_size;
+  uint32_t pc;
+  uint32_t clock;
+  Pipeline pipeline;
+  bool halt;
+  InstructionCount counts;
+} MIPSSim;
 
-void initializeSimulator(MIPS_Init *mips);
-void loadMemory(char *filename, MIPS_Init *mips);
-void fetch(MIPS_Init *mips, MIPS_Instruction *instr);
-void decode(MIPS_Init *mips, MIPS_Instruction *instr);
-void executeInstruction(MIPS_Init *mips, MIPS_Instruction *instr);
-void memoryAccess(MIPS_Init *mips, MIPS_Instruction *instr);
-void writeBack(MIPS_Init *mips, MIPS_Instruction *instr);
-void printRegisters(MIPS_Init *mips);
-void printMemory(MIPS_Init *mips);
-void controlFlow(MIPS_Instruction *instr, MIPS_Init *mips);
-int performArithmeticOperation(unsigned int opcode, int rsValue, int rtValue, int immValue);
-int performImmediateOperation(unsigned int opcode, int rsValue, int immValue);
-void processQueue(Queue *q, MIPS_Init *mips);
+void init_simulator(MIPSSim *mips);
+void destroy_simulator(MIPSSim *mips);
+void load_memory(MIPSSim *mips, char *filename);
+void fetch_stage(MIPSSim *mips);
+void decode_stage(MIPSSim *mips);
+void execute_stage(MIPSSim *mips);
+void memory_stage(MIPSSim *mips);
+void writeback_stage(MIPSSim *mips);
+void process(MIPSSim *mips);
+
+uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode);
+bool control_flow(MIPSSim *mips, Instruction *instr);
+void adjust_pc(MIPSSim *mips);
+
+void log_registers(MIPSSim *mips);
+void log_memory(MIPSSim *mips);
 
 #endif
