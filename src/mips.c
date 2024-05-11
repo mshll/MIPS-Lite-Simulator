@@ -16,7 +16,7 @@ void init_simulator(MIPSSim *mips) {
   mips->clock = 0;
   mips->halt = false;
   mips->counts = (InstructionCount){0};
-  init_pipeline(&mips->pipeline);
+  init_pipeline(&mips->pipeline, true);  //*** TRUE for pipelined, FALSE for non-pipelined
 
   log_registers(mips);
 }
@@ -57,7 +57,7 @@ void fetch_stage(MIPSSim *mips) {
 }
 
 void decode_stage(MIPSSim *mips) {
-  Instruction *instr = peek_pipeline_stage(&mips->pipeline, ID);
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? ID : IF);
   if (instr == NULL || instr->stage != ID) {
     return;
   }
@@ -165,7 +165,7 @@ bool control_flow(MIPSSim *mips, Instruction *instr) {
 }
 
 void execute_stage(MIPSSim *mips) {
-  Instruction *instr = peek_pipeline_stage(&mips->pipeline, EX);
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? EX : IF);
   if (instr == NULL || instr->stage != EX) {
     return;
   }
@@ -187,7 +187,7 @@ void execute_stage(MIPSSim *mips) {
       bool branch_taken = control_flow(mips, instr);
       instr->stage = DONE;
       // if branch taken, point upstream instructions to NOP
-      if (branch_taken) {
+      if (branch_taken && mips->pipeline.is_pipelined) {
         for (int i = 0; i < EX; i++) {
           Instruction *upstream = peek_pipeline_stage(&mips->pipeline, i);
           if (upstream != NULL) {
@@ -214,7 +214,7 @@ void execute_stage(MIPSSim *mips) {
 }
 
 void memory_stage(MIPSSim *mips) {
-  Instruction *instr = peek_pipeline_stage(&mips->pipeline, MEM);
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? MEM : IF);
   if (instr == NULL || instr->stage != MEM) {
     return;
   }
@@ -243,7 +243,7 @@ void memory_stage(MIPSSim *mips) {
 }
 
 void writeback_stage(MIPSSim *mips) {
-  Instruction *instr = peek_pipeline_stage(&mips->pipeline, WB);
+  Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? WB : IF);
   if (instr == NULL || instr->stage != WB) {
     return;
   }
@@ -301,6 +301,7 @@ void adjust_pc(MIPSSim *mips) {
     Instruction *instr = peek_pipeline_stage(&mips->pipeline, i);
     if (instr != NULL) {
       mips->pc -= 4;
+      mips->clock--;
       break;
     }
   }

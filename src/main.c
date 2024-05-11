@@ -8,6 +8,7 @@
 
 #include "common.h"
 #include "mips.h"
+#include "pipeline.h"
 
 int main(int argc, char* argv[]) {
   MIPSSim* mips = (MIPSSim*)malloc(sizeof(MIPSSim));
@@ -19,6 +20,7 @@ int main(int argc, char* argv[]) {
     process(mips);
   }
 
+  print_pipeline_state(&mips->pipeline);
   adjust_pc(mips);
 
   printf("======== Simulation complete ========\n");

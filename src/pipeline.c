@@ -6,10 +6,11 @@
 #include "pipeline.h"
 #include "common.h"
 
-void init_pipeline(Pipeline *p) {
+void init_pipeline(Pipeline *p, bool is_pipelined) {
   for (int i = 0; i < NUM_STAGES; i++) {
     p->stages[i] = NULL;
   }
+  p->is_pipelined = is_pipelined;
 }
 
 void fetch_instruction(Pipeline *p, Instruction *instr) {
@@ -41,16 +42,18 @@ void advance_pipeline(Pipeline *p) {
   for (int i = NUM_STAGES - 1; i >= 0; i--) {
     Instruction *instr = peek_pipeline_stage(p, i);
     if (instr != NULL) {
-      if (i == WB || instr->stage == DONE) {
+      if (instr->stage == WB || instr->stage == DONE) {
         LOG("===> Instruction completed: %08x\n", instr->instruction);
         free(p->stages[i]);
         p->stages[i] = NULL;
         // print_pipeline_state(p);
       } else {
         // LOG("===> Advancing %s: %08x from %s to %s\n", stage_names[i], instr->instruction, stage_names[i], stage_names[i + 1]);
-        instr->stage = i + 1;
-        p->stages[i + 1] = instr;
-        p->stages[i] = NULL;
+        instr->stage += 1;
+        if (p->is_pipelined) {
+          p->stages[i + 1] = instr;
+          p->stages[i] = NULL;
+        }
       }
     }
   }
