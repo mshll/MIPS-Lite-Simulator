@@ -25,11 +25,11 @@ int main(int argc, char* argv[]) {
   printf("Total clock cycles: %d\n", mips->clock);
   printf("Final PC: %d\n", mips->pc);
   printf("Instruction counts:\n");
-  printf("- Total Instructions: %d\n", mips->counts.total);
-  printf("- Arithmetic: %d\n", mips->counts.arithmetic);
-  printf("- Logical: %d\n", mips->counts.logical);
-  printf("- Memory: %d\n", mips->counts.memory);
-  printf("- Control: %d\n", mips->counts.control);
+  printf("\\ Total: %d\n", mips->counts.total);
+  printf("\\ Arithmetic: %d\n", mips->counts.arithmetic);
+  printf("\\ Logical: %d\n", mips->counts.logical);
+  printf("\\ Memory: %d\n", mips->counts.memory);
+  printf("\\ Control: %d\n", mips->counts.control);
   printf("================================\n");
 
   log_registers(mips);

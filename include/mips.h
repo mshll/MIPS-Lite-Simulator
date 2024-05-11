@@ -18,8 +18,13 @@ typedef struct {
 } InstructionCount;
 
 typedef struct {
+  uint32_t value;
+  bool modified;
+} MemoryValue;
+
+typedef struct {
   uint32_t registers[32];
-  uint32_t memory[MEMORY_SIZE];
+  MemoryValue memory[MEMORY_SIZE];
   uint32_t memory_size;
   uint32_t pc;
   uint32_t clock;

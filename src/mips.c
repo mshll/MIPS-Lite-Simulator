@@ -35,7 +35,7 @@ void load_memory(MIPSSim *mips, char *filename) {
   char line[10];
   int i = 0;
   while (fgets(line, sizeof(line), file) && i < MEMORY_SIZE) {
-    mips->memory[i] = strtol(line, NULL, 16);
+    mips->memory[i].value = strtol(line, NULL, 16);
     i++;
   }
   fclose(file);
@@ -48,7 +48,7 @@ void fetch_stage(MIPSSim *mips) {
   if (peek_pipeline_stage(&mips->pipeline, IF) == NULL && (mips->pc / 4 < mips->memory_size)) {
     Instruction *instr = (Instruction *)malloc(sizeof(Instruction));
     memset(instr, 0, sizeof(Instruction));
-    instr->instruction = mips->memory[mips->pc / 4];
+    instr->instruction = mips->memory[mips->pc / 4].value;
     instr->stage = IF;
     fetch_instruction(&mips->pipeline, instr);
     mips->pc += 4;
@@ -230,9 +230,10 @@ void memory_stage(MIPSSim *mips) {
       break;
     case I_TYPE_MEM:
       if (instr->opcode == LDW) {
-        instr->mdr = mips->memory[instr->alu_out / 4];
+        instr->mdr = mips->memory[instr->alu_out / 4].value;
       } else if (instr->opcode == STW) {
-        mips->memory[instr->alu_out / 4] = mips->registers[instr->rt];
+        mips->memory[instr->alu_out / 4].value = mips->registers[instr->rt];
+        mips->memory[instr->alu_out / 4].modified = true;
         instr->stage = DONE;
       }
       break;
@@ -269,11 +270,11 @@ void log_memory(MIPSSim *mips) {
   LOG("Memory:\n");
   uint8_t k = 0;
   for (int i = 0; i < mips->memory_size; i++) {
-    if (mips->memory[i] != 0) {
+    if (mips->memory[i].modified) {
       if (k % 8 == 0 && k != 0) {
         LOG("\n");
       }
-      LOG("[%4d:%08X] ", i * 4, mips->memory[i]);
+      LOG("[%4d:%d] ", i * 4, mips->memory[i].value);
       k++;
     }
   }
