@@ -88,13 +88,13 @@ void advance_pipeline(Pipeline *p) {
 }
 
 /**
- * @brief Flush the pipeline from a given stage to the beginning
+ * @brief Flush the pipeline from a given stage (exclusive) to the beginning
  *
  * @param p     Pipeline
  * @param stage Stage to flush from
  */
 void flush_pipeline(Pipeline *p, PipelineStage stage) {
-  for (int i = stage; i >= 0; i--) {
+  for (int i = stage - 1; i >= 0; i--) {
     if (p->stages[i] != NULL) {
       free(p->stages[i]);
       p->stages[i] = NULL;

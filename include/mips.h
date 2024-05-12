@@ -20,11 +20,11 @@ typedef struct {
 typedef struct {
   uint32_t value;
   bool modified;
-} MemoryValue;
+} Value;
 
 typedef struct {
-  uint32_t registers[32];
-  MemoryValue memory[MEMORY_SIZE];
+  Value registers[32];
+  Value memory[MEMORY_SIZE];
   uint32_t memory_size;
   uint32_t pc;
   uint32_t clock;

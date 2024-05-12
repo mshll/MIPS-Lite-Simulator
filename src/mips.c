@@ -183,19 +183,19 @@ uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode) {
 bool control_flow(MIPSSim *mips, Instruction *instr) {
   switch (instr->opcode) {
     case BZ:  // Branch if zero
-      if (mips->registers[instr->rs] == 0) {
+      if (mips->registers[instr->rs].value == 0) {
         mips->pc = instr->alu_out - 4;
         return true;
       }
       break;
     case BEQ:  // Branch if equal
-      if (mips->registers[instr->rs] == mips->registers[instr->rt]) {
+      if (mips->registers[instr->rs].value == mips->registers[instr->rt].value) {
         mips->pc = instr->alu_out - 4;
         return true;
       }
       break;
     case JR:  // Jump register
-      mips->pc = mips->registers[instr->rs];
+      mips->pc = mips->registers[instr->rs].value;
       return true;
     case HALT:  // Halt program
       mips->halt = true;
@@ -218,8 +218,8 @@ void execute_stage(MIPSSim *mips) {
     return;
   }
 
-  uint32_t rs = mips->registers[instr->rs];
-  uint32_t rt = mips->registers[instr->rt];
+  uint32_t rs = mips->registers[instr->rs].value;
+  uint32_t rt = mips->registers[instr->rt].value;
 
   // Perform the operation based on the instruction type
   switch (instr->type) {
@@ -230,7 +230,7 @@ void execute_stage(MIPSSim *mips) {
       instr->alu_out = perform_operation(rs, instr->imm, instr->opcode);
       break;
     case I_TYPE_MEM:  // I-Type memory instructions (LDW, STW)
-      instr->alu_out = mips->registers[instr->rs] + instr->imm;
+      instr->alu_out = mips->registers[instr->rs].value + instr->imm;
       break;
     case J_TYPE:  // J-Type instructions (BZ, BEQ, JR, HALT)
       bool branch_taken = control_flow(mips, instr);
@@ -267,12 +267,14 @@ void memory_stage(MIPSSim *mips) {
   switch (instr->type) {
     case R_TYPE:
       // If R-Type, write the result back to the register
-      mips->registers[instr->rd] = instr->alu_out;
+      mips->registers[instr->rd].value = instr->alu_out;
+      mips->registers[instr->rd].modified = true;
       instr->stage = DONE;
       break;
     case I_TYPE_IMM:
       // If immediate, write the result back to the register
-      mips->registers[instr->rt] = instr->alu_out;
+      mips->registers[instr->rt].value = instr->alu_out;
+      mips->registers[instr->rt].modified = true;
       instr->stage = DONE;
       break;
     case I_TYPE_MEM:
@@ -280,7 +282,7 @@ void memory_stage(MIPSSim *mips) {
         instr->mdr = mips->memory[instr->alu_out / 4].value;
 
       } else if (instr->opcode == STW) {  // If store word, write to memory from register
-        mips->memory[instr->alu_out / 4].value = mips->registers[instr->rt];
+        mips->memory[instr->alu_out / 4].value = mips->registers[instr->rt].value;
         mips->memory[instr->alu_out / 4].modified = true;
         instr->stage = DONE;
       }
@@ -303,7 +305,8 @@ void writeback_stage(MIPSSim *mips) {
 
   // Write the result back to the register (only LDW makes it to the WB stage)
   if (instr->type == I_TYPE_MEM) {
-    mips->registers[instr->rt] = instr->mdr;
+    mips->registers[instr->rt].value = instr->mdr;
+    mips->registers[instr->rt].modified = true;
   }
 }
 
@@ -344,11 +347,11 @@ void log_registers(MIPSSim *mips) {
   LOG("Registers:\n");
   uint8_t k = 0;
   for (int i = 0; i < 32; i++) {
-    if (mips->registers[i] != 0) {
+    if (mips->registers[i].modified) {
       if (k % 4 == 0 && k != 0) {
         LOG("\n");
       }
-      LOG("[%2d:%4d] ", i, mips->registers[i]);
+      LOG("[%2d:%4d] ", i, mips->registers[i].value);
       k++;
     }
   }
