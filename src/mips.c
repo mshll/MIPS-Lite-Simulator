@@ -7,6 +7,11 @@
 #include "common.h"
 #include "pipeline.h"
 
+/**
+ * @brief Initialize the MIPS Lite simulator
+ *
+ * @param mips
+ */
 void init_simulator(MIPSSim *mips) {
   memset(mips, 0, sizeof(MIPSSim));
   memset(mips->registers, 0, sizeof(mips->registers));
@@ -21,10 +26,21 @@ void init_simulator(MIPSSim *mips) {
   log_registers(mips);
 }
 
+/**
+ * @brief Destroy the MIPS Lite simulator
+ *
+ * @param mips  MIPS simulator
+ */
 void destroy_simulator(MIPSSim *mips) {
   free(mips);
 }
 
+/**
+ * @brief Load the program into memory from a file
+ *
+ * @param mips      MIPS simulator
+ * @param filename  File to load
+ */
 void load_memory(MIPSSim *mips, char *filename) {
   FILE *file = fopen(filename, "r");
   if (!file) {
@@ -34,16 +50,23 @@ void load_memory(MIPSSim *mips, char *filename) {
   }
   char line[10];
   int i = 0;
+
+  // Read the file line by line and load into memory
   while (fgets(line, sizeof(line), file) && i < MEMORY_SIZE) {
     mips->memory[i].value = strtol(line, NULL, 16);
     i++;
   }
   fclose(file);
-  mips->memory_size = i;
+  mips->memory_size = i;  // Set the memory size with the number of instructions loaded
   LOG("Memory loaded from file: %s\n", filename);
   log_memory(mips);
 }
 
+/**
+ * @brief Fetch the next instruction from memory (IF stage)
+ *
+ * @param mips  MIPS simulator
+ */
 void fetch_stage(MIPSSim *mips) {
   if (peek_pipeline_stage(&mips->pipeline, IF) == NULL && (mips->pc / 4 < mips->memory_size)) {
     Instruction *instr = (Instruction *)malloc(sizeof(Instruction));
@@ -56,6 +79,11 @@ void fetch_stage(MIPSSim *mips) {
   }
 }
 
+/**
+ * @brief Decode the instruction (ID stage)
+ *
+ * @param mips  MIPS simulator
+ */
 void decode_stage(MIPSSim *mips) {
   Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? ID : IF);
   if (instr == NULL || instr->stage != ID) {
@@ -111,6 +139,14 @@ void decode_stage(MIPSSim *mips) {
       instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
 }
 
+/**
+ * @brief Perform the operation based on the opcode in the execute stage
+ *
+ * @param rs        Source register
+ * @param rt        Target register
+ * @param opcode    Operation code
+ * @return uint32_t Result of the operation
+ */
 uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode) {
   // LOG("Performing operation: %d (%d) %d\n", rs, opcode, rt);
   switch (opcode) {
@@ -137,24 +173,31 @@ uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode) {
   }
 }
 
+/**
+ * @brief Control flow instructions (BZ, BEQ, JR, HALT) handling in the execute stage
+ *
+ * @param mips  MIPS simulator
+ * @param instr Instruction
+ * @return true if the branch is taken, false otherwise
+ */
 bool control_flow(MIPSSim *mips, Instruction *instr) {
   switch (instr->opcode) {
-    case BZ:
+    case BZ:  // Branch if zero
       if (mips->registers[instr->rs] == 0) {
         mips->pc = instr->alu_out - 4;
         return true;
       }
       break;
-    case BEQ:
+    case BEQ:  // Branch if equal
       if (mips->registers[instr->rs] == mips->registers[instr->rt]) {
         mips->pc = instr->alu_out - 4;
         return true;
       }
       break;
-    case JR:
+    case JR:  // Jump register
       mips->pc = mips->registers[instr->rs];
       return true;
-    case HALT:
+    case HALT:  // Halt program
       mips->halt = true;
       instr->stage = DONE;
       return true;
@@ -164,6 +207,11 @@ bool control_flow(MIPSSim *mips, Instruction *instr) {
   return false;
 }
 
+/**
+ * @brief Execute stage of the pipeline (EX stage)
+ *
+ * @param mips  MIPS simulator
+ */
 void execute_stage(MIPSSim *mips) {
   Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? EX : IF);
   if (instr == NULL || instr->stage != EX) {
@@ -173,27 +221,23 @@ void execute_stage(MIPSSim *mips) {
   uint32_t rs = mips->registers[instr->rs];
   uint32_t rt = mips->registers[instr->rt];
 
+  // Perform the operation based on the instruction type
   switch (instr->type) {
-    case R_TYPE:
+    case R_TYPE:  // R-Type instructions (ADD, SUB, MUL, OR, AND, XOR)
       instr->alu_out = perform_operation(rs, rt, instr->opcode);
       break;
-    case I_TYPE_IMM:
+    case I_TYPE_IMM:  // I-Type instructions with immediate values (ADDI, SUBI, MULI, ORI, ANDI, XORI)
       instr->alu_out = perform_operation(rs, instr->imm, instr->opcode);
       break;
-    case I_TYPE_MEM:
+    case I_TYPE_MEM:  // I-Type memory instructions (LDW, STW)
       instr->alu_out = mips->registers[instr->rs] + instr->imm;
       break;
-    case J_TYPE:
+    case J_TYPE:  // J-Type instructions (BZ, BEQ, JR, HALT)
       bool branch_taken = control_flow(mips, instr);
       instr->stage = DONE;
-      // if branch taken, point upstream instructions to NOP
+      // If branch is taken, flush the pipeline
       if (branch_taken && mips->pipeline.is_pipelined) {
-        for (int i = 0; i < EX; i++) {
-          Instruction *upstream = peek_pipeline_stage(&mips->pipeline, i);
-          if (upstream != NULL) {
-            upstream->stage = DONE;
-          }
-        }
+        flush_pipeline(&mips->pipeline, EX);
       }
       break;
     default:
@@ -219,19 +263,23 @@ void memory_stage(MIPSSim *mips) {
     return;
   }
 
+  // Perform memory operation based on the instruction type
   switch (instr->type) {
     case R_TYPE:
+      // If R-Type, write the result back to the register
       mips->registers[instr->rd] = instr->alu_out;
       instr->stage = DONE;
       break;
     case I_TYPE_IMM:
+      // If immediate, write the result back to the register
       mips->registers[instr->rt] = instr->alu_out;
       instr->stage = DONE;
       break;
     case I_TYPE_MEM:
-      if (instr->opcode == LDW) {
+      if (instr->opcode == LDW) {  // If load word, read from memory and store in MDR
         instr->mdr = mips->memory[instr->alu_out / 4].value;
-      } else if (instr->opcode == STW) {
+
+      } else if (instr->opcode == STW) {  // If store word, write to memory from register
         mips->memory[instr->alu_out / 4].value = mips->registers[instr->rt];
         mips->memory[instr->alu_out / 4].modified = true;
         instr->stage = DONE;
@@ -242,17 +290,28 @@ void memory_stage(MIPSSim *mips) {
   }
 }
 
+/**
+ * @brief Writeback stage of the pipeline (WB stage)
+ *
+ * @param mips  MIPS simulator
+ */
 void writeback_stage(MIPSSim *mips) {
   Instruction *instr = peek_pipeline_stage(&mips->pipeline, mips->pipeline.is_pipelined ? WB : IF);
   if (instr == NULL || instr->stage != WB) {
     return;
   }
 
+  // Write the result back to the register (only LDW makes it to the WB stage)
   if (instr->type == I_TYPE_MEM) {
     mips->registers[instr->rt] = instr->mdr;
   }
 }
 
+/**
+ * @brief Process the next clock cycle of the simulator
+ *
+ * @param mips  MIPS simulator
+ */
 void process(MIPSSim *mips) {
   LOG("-> CLK: %d, PC: %d\n", mips->clock, mips->pc);
   writeback_stage(mips);
