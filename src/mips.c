@@ -7,6 +7,12 @@
 #include "common.h"
 #include "pipeline.h"
 
+/* helper functions prototypes */
+void log_memory(MIPSSim *mips);
+void log_registers(MIPSSim *mips);
+void adjust_pc(MIPSSim *mips);
+void check_hazards(MIPSSim *mips, Instruction *instr);
+
 /**
  * @brief Initialize the MIPS Lite simulator
  *
@@ -135,6 +141,8 @@ void decode_stage(MIPSSim *mips) {
     instr->alu_out = mips->pc + (instr->imm << 2);
   }
 
+  check_hazards(mips, instr);
+
   LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
       instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
 }
@@ -236,7 +244,7 @@ void execute_stage(MIPSSim *mips) {
       bool branch_taken = control_flow(mips, instr);
       instr->stage = DONE;
       // If branch is taken, flush the pipeline
-      if (branch_taken && mips->pipeline.is_pipelined) {
+      if (branch_taken) {
         flush_pipeline(&mips->pipeline, EX);
       }
       break;
@@ -265,18 +273,6 @@ void memory_stage(MIPSSim *mips) {
 
   // Perform memory operation based on the instruction type
   switch (instr->type) {
-    case R_TYPE:
-      // If R-Type, write the result back to the register
-      mips->registers[instr->rd].value = instr->alu_out;
-      mips->registers[instr->rd].modified = true;
-      instr->stage = DONE;
-      break;
-    case I_TYPE_IMM:
-      // If immediate, write the result back to the register
-      mips->registers[instr->rt].value = instr->alu_out;
-      mips->registers[instr->rt].modified = true;
-      instr->stage = DONE;
-      break;
     case I_TYPE_MEM:
       if (instr->opcode == LDW) {  // If load word, read from memory and store in MDR
         instr->mdr = mips->memory[instr->alu_out / 4].value;
@@ -284,7 +280,6 @@ void memory_stage(MIPSSim *mips) {
       } else if (instr->opcode == STW) {  // If store word, write to memory from register
         mips->memory[instr->alu_out / 4].value = mips->registers[instr->rt].value;
         mips->memory[instr->alu_out / 4].modified = true;
-        instr->stage = DONE;
       }
       break;
     default:
@@ -303,10 +298,23 @@ void writeback_stage(MIPSSim *mips) {
     return;
   }
 
-  // Write the result back to the register (only LDW makes it to the WB stage)
-  if (instr->type == I_TYPE_MEM) {
-    mips->registers[instr->rt].value = instr->mdr;
-    mips->registers[instr->rt].modified = true;
+  switch (instr->type) {
+    case R_TYPE:
+      mips->registers[instr->rd].value = instr->alu_out;
+      mips->registers[instr->rd].modified = true;
+      break;
+    case I_TYPE_IMM:
+      mips->registers[instr->rt].value = instr->alu_out;
+      mips->registers[instr->rt].modified = true;
+      break;
+    case I_TYPE_MEM:
+      if (instr->opcode == LDW) {
+        mips->registers[instr->rt].value = instr->mdr;
+        mips->registers[instr->rt].modified = true;
+      }
+      break;
+    default:
+      break;
   }
 }
 
@@ -359,12 +367,49 @@ void log_registers(MIPSSim *mips) {
 }
 
 void adjust_pc(MIPSSim *mips) {
-  for (int i = 0; i < EX; i++) {
+  for (int i = 0; i <= EX; i++) {
     Instruction *instr = peek_pipeline_stage(&mips->pipeline, i);
     if (instr != NULL) {
       mips->pc -= 4;
-      mips->clock--;
       break;
+    }
+  }
+}
+
+/**
+ * @brief Check for RAW hazards and stall the pipeline if necessary
+ *
+ * @param mips  MIPS simulator
+ * @param instr Instruction
+ */
+void check_hazards(MIPSSim *mips, Instruction *instr) {
+  for (int i = ID + 1; i < NUM_STAGES; i++) {
+    Instruction *next_instr = peek_pipeline_stage(&mips->pipeline, i);
+    if (next_instr == NULL) continue;
+
+    int8_t check_reg = -1;
+    if (next_instr->type == R_TYPE) {
+      check_reg = next_instr->rd;
+    } else if (next_instr->type == I_TYPE_IMM || next_instr->type == I_TYPE_MEM) {
+      check_reg = next_instr->rt;
+    }
+
+    switch (instr->type) {
+      case R_TYPE:
+        if (instr->rs == check_reg || instr->rt == check_reg) {
+          stall_pipeline(&mips->pipeline, i - ID);
+          return;
+        }
+        break;
+      case I_TYPE_IMM:
+      case I_TYPE_MEM:
+        if (instr->rs == check_reg) {
+          stall_pipeline(&mips->pipeline, i - ID);
+          return;
+        }
+        break;
+      default:
+        break;
     }
   }
 }

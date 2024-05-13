@@ -17,6 +17,8 @@ void init_pipeline(Pipeline *p, bool is_pipelined) {
     p->stages[i] = NULL;
   }
   p->is_pipelined = is_pipelined;
+  p->stall_cycles = 0;
+  p->total_stalls = 0;
 }
 
 /**
@@ -67,6 +69,7 @@ void print_pipeline_state(Pipeline *p) {
  * @param p Pipeline
  */
 void advance_pipeline(Pipeline *p) {
+  const char *stage_names[] = {"IF", "ID", "EX", "MEM", "WB", "DONE"};
   for (int i = NUM_STAGES - 1; i >= 0; i--) {
     Instruction *instr = peek_pipeline_stage(p, i);
     if (instr != NULL) {
@@ -75,6 +78,8 @@ void advance_pipeline(Pipeline *p) {
         free(p->stages[i]);
         p->stages[i] = NULL;
         // print_pipeline_state(p);
+      } else if (p->stall_cycles > 0 && instr->stage <= ID) {
+        LOG("===> Stalling %s: %08x\n", stage_names[i], instr->instruction);
       } else {
         // LOG("===> Advancing %s: %08x from %s to %s\n", stage_names[i], instr->instruction, stage_names[i], stage_names[i + 1]);
         instr->stage += 1;
@@ -85,19 +90,36 @@ void advance_pipeline(Pipeline *p) {
       }
     }
   }
+
+  if (p->stall_cycles > 0) {
+    p->stall_cycles--;
+  }
 }
 
 /**
- * @brief Flush the pipeline from a given stage (exclusive) to the beginning
+ * @brief Flush the pipeline from a given stage (exclusive) to the beginning. [Only in pipelined mode]
  *
  * @param p     Pipeline
  * @param stage Stage to flush from
  */
 void flush_pipeline(Pipeline *p, PipelineStage stage) {
+  if (!p->is_pipelined) return;
+
   for (int i = stage - 1; i >= 0; i--) {
     if (p->stages[i] != NULL) {
       free(p->stages[i]);
       p->stages[i] = NULL;
     }
   }
+}
+
+/**
+ * @brief Stall the pipeline for a given number of cycles
+ *
+ * @param p Pipeline
+ * @param n Number of cycles to stall
+ */
+void stall_pipeline(Pipeline *p, int n) {
+  p->stall_cycles = n;
+  p->total_stalls++;
 }

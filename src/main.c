@@ -26,6 +26,7 @@ int main(int argc, char* argv[]) {
   printf("======== Simulation complete ========\n");
   printf("Total clock cycles: %d\n", mips->clock);
   printf("Final PC: %d\n", mips->pc);
+  printf("Total Stalls: %d\n", mips->pipeline.total_stalls);
   printf("Instruction counts:\n");
   printf("\\ Total: %d\n", mips->counts.total);
   printf("\\ Arithmetic: %d\n", mips->counts.arithmetic);
