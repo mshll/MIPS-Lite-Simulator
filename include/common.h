@@ -63,6 +63,15 @@ typedef enum {
   J_TYPE
 } InstructionType;
 
+typedef enum{
+  RT,
+  RS
+} ForwardTarget;
+typedef struct{
+  uint32_t reg;
+  bool use_flag;
+  ForwardTarget target;
+} ForwardReg;
 typedef struct {
   uint32_t instruction;
   PipelineStage stage;
@@ -74,6 +83,7 @@ typedef struct {
   int16_t imm;
   uint32_t alu_out;
   uint32_t mdr;
+  ForwardReg forward_reg;
 } Instruction;
 
 #endif

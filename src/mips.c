@@ -229,6 +229,16 @@ void execute_stage(MIPSSim *mips) {
   uint32_t rs = mips->registers[instr->rs].value;
   uint32_t rt = mips->registers[instr->rt].value;
 
+  if(instr->forward_reg.use_flag){
+   if(instr->forward_reg.target == RT) {
+    rt = instr->forward_reg.reg;
+   }
+   else{
+    rs = instr->forward_reg.reg;
+   }
+    
+  }
+
   // Perform the operation based on the instruction type
   switch (instr->type) {
     case R_TYPE:  // R-Type instructions (ADD, SUB, MUL, OR, AND, XOR)
@@ -397,15 +407,42 @@ void check_hazards(MIPSSim *mips, Instruction *instr) {
     switch (instr->type) {
       case R_TYPE:
         if (instr->rs == check_reg || instr->rt == check_reg) {
+          if(((next_instr->type == R_TYPE) ||(next_instr->type == I_TYPE_IMM)) && (next_instr->stage >= EX)){
+            instr->forward_reg.use_flag = true;
+            instr->forward_reg.reg= next_instr->alu_out;
+            instr->forward_reg.target = (instr->rs == check_reg) ? RS : RT;
+            return;
+          }
+          else if( next_instr->opcode ==  LDW && next_instr->stage >= MEM ){
+            instr->forward_reg.use_flag = true;
+            instr->forward_reg.reg= next_instr->mdr;
+            instr->forward_reg.target = (instr->rs == check_reg) ? RS : RT;
+            return;
+          }
+          else{
           stall_pipeline(&mips->pipeline, i - ID);
           return;
+          }
         }
         break;
       case I_TYPE_IMM:
       case I_TYPE_MEM:
         if (instr->rs == check_reg) {
+          if(((next_instr->type == R_TYPE) ||(next_instr->type == I_TYPE_IMM)) && (next_instr->stage >= EX)){
+            instr->forward_reg.use_flag = true;
+            instr->forward_reg.reg= next_instr->alu_out;
+            instr->forward_reg.target = RS;
+            return;
+          }
+          else if(next_instr->opcode == LDW && next_instr->stage >=MEM ){
+            instr->forward_reg.use_flag = true;
+            instr->forward_reg.reg= next_instr->mdr;
+            instr->forward_reg.target = RS;
+            return;
+          }
+          else{
           stall_pipeline(&mips->pipeline, i - ID);
-          return;
+          return;}
         }
         break;
       default:
