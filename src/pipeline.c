@@ -69,8 +69,11 @@ void print_pipeline_state(Pipeline *p) {
  * @brief Advance the pipeline by moving instructions to the next stage or freeing them
  *
  * @param p Pipeline
+ * @return true if the pipeline is not empty
  */
-void advance_pipeline(Pipeline *p) {
+bool advance_pipeline(Pipeline *p) {
+  bool is_empty = true;
+
   for (int i = NUM_STAGES - 1; i >= 0; i--) {
     Instruction *instr = peek_pipeline_stage(p, i);
     if (instr != NULL) {
@@ -80,8 +83,10 @@ void advance_pipeline(Pipeline *p) {
         p->stages[i] = NULL;
         // print_pipeline_state(p);
       } else if (p->stall_cycles > 0 && instr->stage <= ID) {
-        LOG("===> Stalling %s: %08x\n", stage_names[i], instr->instruction);
+        is_empty = false;
+        // LOG("===> Stalling %s: %08x\n", stage_names[i], instr->instruction);
       } else {
+        is_empty = false;
         // LOG("===> Advancing %s: %08x from %s to %s\n", stage_names[i], instr->instruction, stage_names[i], stage_names[i + 1]);
         instr->stage += 1;
         if (p->is_pipelined) {
@@ -95,6 +100,8 @@ void advance_pipeline(Pipeline *p) {
   if (p->stall_cycles > 0) {
     p->stall_cycles--;
   }
+
+  return is_empty;
 }
 
 /**
@@ -123,4 +130,5 @@ void flush_pipeline(Pipeline *p, PipelineStage stage) {
 void stall_pipeline(Pipeline *p, int n) {
   p->stall_cycles = n;
   p->total_stalls++;
+  LOG("===> Stalling pipeline for %d cycles\n", n);
 }

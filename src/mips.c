@@ -141,8 +141,8 @@ void decode_stage(MIPSSim *mips) {
 
   if (mips->mode != NOT_PIPED) check_hazards(mips, instr);
 
-  LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
-      instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
+  // LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
+  //     instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
 }
 
 /**
@@ -328,6 +328,7 @@ void writeback_stage(MIPSSim *mips) {
  * @param mips  MIPS simulator
  */
 void process(MIPSSim *mips) {
+  mips->clock++;
   LOG("-> CLK: %d, PC: %d\n", mips->clock, mips->pc);
   writeback_stage(mips);
   memory_stage(mips);
@@ -336,8 +337,7 @@ void process(MIPSSim *mips) {
   decode_stage(mips);
   fetch_stage(mips);
   print_pipeline_state(&mips->pipeline);
-  advance_pipeline(&mips->pipeline);
-  mips->clock++;
+  mips->done = advance_pipeline(&mips->pipeline);
 }
 
 void print_memory(MIPSSim *mips) {
@@ -393,7 +393,7 @@ void set_forward_reg(Instruction *instr, int8_t check_reg, int reg) {
  * @param instr Instruction
  */
 void check_hazards(MIPSSim *mips, Instruction *instr) {
-  for (int i = ID + 1; i < NUM_STAGES; i++) {
+  for (int i = EX; i < NUM_STAGES; i++) {
     Instruction *next_instr = peek_pipeline_stage(&mips->pipeline, i);
     if (next_instr == NULL || next_instr->type == J_TYPE) continue;
 
@@ -416,7 +416,7 @@ void check_hazards(MIPSSim *mips, Instruction *instr) {
         return;
 
       } else {
-        stall_pipeline(&mips->pipeline, i - ID);
+        stall_pipeline(&mips->pipeline, WB - i);
         return;
       }
     }

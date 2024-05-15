@@ -21,7 +21,7 @@ int main(int argc, char* argv[]) {
   init_simulator(mips, mode);
   load_memory(mips, filename);
 
-  while (mips->pc / 4 < mips->memory_size && !mips->halt) {
+  while (!mips->done && !mips->halt) {
     // LOG("Clock cycle: %d\n", mips->clock);
     process(mips);
   }

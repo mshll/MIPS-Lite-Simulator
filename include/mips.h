@@ -36,6 +36,7 @@ typedef struct {
   uint32_t clock;
   Pipeline pipeline;
   bool halt;
+  bool done;
   InstructionCount counts;
   Mode mode;
 } MIPSSim;
