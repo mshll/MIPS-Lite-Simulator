@@ -8,8 +8,8 @@
 #include "pipeline.h"
 
 /* helper functions prototypes */
-void log_memory(MIPSSim *mips);
-void log_registers(MIPSSim *mips);
+void print_memory(MIPSSim *mips);
+void print_registers(MIPSSim *mips);
 void adjust_pc(MIPSSim *mips);
 void check_hazards(MIPSSim *mips, Instruction *instr);
 
@@ -18,18 +18,17 @@ void check_hazards(MIPSSim *mips, Instruction *instr);
  *
  * @param mips
  */
-void init_simulator(MIPSSim *mips) {
+void init_simulator(MIPSSim *mips, Mode mode) {
   memset(mips, 0, sizeof(MIPSSim));
   memset(mips->registers, 0, sizeof(mips->registers));
   memset(mips->memory, 0, sizeof(mips->memory));
+  mips->mode = mode;
   mips->memory_size = 0;
   mips->pc = 0;
   mips->clock = 0;
   mips->halt = false;
   mips->counts = (InstructionCount){0};
-  init_pipeline(&mips->pipeline, true);  //*** TRUE for pipelined, FALSE for non-pipelined
-
-  log_registers(mips);
+  init_pipeline(&mips->pipeline, !!mode);
 }
 
 /**
@@ -65,7 +64,6 @@ void load_memory(MIPSSim *mips, char *filename) {
   fclose(file);
   mips->memory_size = i;  // Set the memory size with the number of instructions loaded
   LOG("Memory loaded from file: %s\n", filename);
-  log_memory(mips);
 }
 
 /**
@@ -141,7 +139,7 @@ void decode_stage(MIPSSim *mips) {
     instr->alu_out = mips->pc + (instr->imm << 2);
   }
 
-  check_hazards(mips, instr);
+  if (mips->mode != NOT_PIPED) check_hazards(mips, instr);
 
   LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
       instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
@@ -207,7 +205,6 @@ bool control_flow(MIPSSim *mips, Instruction *instr) {
       return true;
     case HALT:  // Halt program
       mips->halt = true;
-      instr->stage = DONE;
       return true;
     default:
       break;
@@ -229,14 +226,12 @@ void execute_stage(MIPSSim *mips) {
   uint32_t rs = mips->registers[instr->rs].value;
   uint32_t rt = mips->registers[instr->rt].value;
 
-  if(instr->forward_reg.use_flag){
-   if(instr->forward_reg.target == RT) {
-    rt = instr->forward_reg.reg;
-   }
-   else{
-    rs = instr->forward_reg.reg;
-   }
-    
+  // Forward the register value to either rs or rt if it is forwarded
+  if (instr->forward_reg.is_forwarded) {
+    if (instr->forward_reg.target == RT)
+      rt = instr->forward_reg.reg;
+    else
+      rs = instr->forward_reg.reg;
   }
 
   // Perform the operation based on the instruction type
@@ -252,7 +247,6 @@ void execute_stage(MIPSSim *mips) {
       break;
     case J_TYPE:  // J-Type instructions (BZ, BEQ, JR, HALT)
       bool branch_taken = control_flow(mips, instr);
-      instr->stage = DONE;
       // If branch is taken, flush the pipeline
       if (branch_taken) {
         flush_pipeline(&mips->pipeline, EX);
@@ -346,44 +340,50 @@ void process(MIPSSim *mips) {
   mips->clock++;
 }
 
-void log_memory(MIPSSim *mips) {
-  LOG("Memory:\n");
+void print_memory(MIPSSim *mips) {
+  printf("Memory:\n");
   uint8_t k = 0;
   for (int i = 0; i < mips->memory_size; i++) {
     if (mips->memory[i].modified) {
       if (k % 8 == 0 && k != 0) {
-        LOG("\n");
+        printf("\n");
       }
-      LOG("[%4d:%d] ", i * 4, mips->memory[i].value);
+      printf("[%4d:%d] ", i * 4, mips->memory[i].value);
       k++;
     }
   }
-  LOG("\n");
+  printf("\n");
 }
 
-void log_registers(MIPSSim *mips) {
-  LOG("Registers:\n");
+void print_registers(MIPSSim *mips) {
+  printf("Registers:\n");
   uint8_t k = 0;
   for (int i = 0; i < 32; i++) {
     if (mips->registers[i].modified) {
       if (k % 4 == 0 && k != 0) {
-        LOG("\n");
+        printf("\n");
       }
-      LOG("[%2d:%4d] ", i, mips->registers[i].value);
+      printf("[%2d:%4d] ", i, mips->registers[i].value);
       k++;
     }
   }
-  LOG("\n");
+  printf("\n");
 }
 
 void adjust_pc(MIPSSim *mips) {
+  if (mips->mode == NOT_PIPED) return;
+
   for (int i = 0; i <= EX; i++) {
     Instruction *instr = peek_pipeline_stage(&mips->pipeline, i);
     if (instr != NULL) {
       mips->pc -= 4;
-      break;
     }
   }
+}
+
+// Helper function to set the forward register
+void set_forward_reg(Instruction *instr, int8_t check_reg, int reg) {
+  instr->forward_reg = (ForwardReg){.is_forwarded = true, .reg = reg, .target = (instr->rs == check_reg) ? RS : RT};
 }
 
 /**
@@ -395,58 +395,30 @@ void adjust_pc(MIPSSim *mips) {
 void check_hazards(MIPSSim *mips, Instruction *instr) {
   for (int i = ID + 1; i < NUM_STAGES; i++) {
     Instruction *next_instr = peek_pipeline_stage(&mips->pipeline, i);
-    if (next_instr == NULL) continue;
+    if (next_instr == NULL || next_instr->type == J_TYPE) continue;
 
-    int8_t check_reg = -1;
-    if (next_instr->type == R_TYPE) {
-      check_reg = next_instr->rd;
-    } else if (next_instr->type == I_TYPE_IMM || next_instr->type == I_TYPE_MEM) {
-      check_reg = next_instr->rt;
-    }
+    int8_t check_reg = (next_instr->type == R_TYPE) ? next_instr->rd : next_instr->rt;
 
-    switch (instr->type) {
-      case R_TYPE:
-        if (instr->rs == check_reg || instr->rt == check_reg) {
-          if(((next_instr->type == R_TYPE) ||(next_instr->type == I_TYPE_IMM)) && (next_instr->stage >= EX)){
-            instr->forward_reg.use_flag = true;
-            instr->forward_reg.reg= next_instr->alu_out;
-            instr->forward_reg.target = (instr->rs == check_reg) ? RS : RT;
-            return;
-          }
-          else if( next_instr->opcode ==  LDW && next_instr->stage >= MEM ){
-            instr->forward_reg.use_flag = true;
-            instr->forward_reg.reg= next_instr->mdr;
-            instr->forward_reg.target = (instr->rs == check_reg) ? RS : RT;
-            return;
-          }
-          else{
-          stall_pipeline(&mips->pipeline, i - ID);
-          return;
-          }
-        }
-        break;
-      case I_TYPE_IMM:
-      case I_TYPE_MEM:
-        if (instr->rs == check_reg) {
-          if(((next_instr->type == R_TYPE) ||(next_instr->type == I_TYPE_IMM)) && (next_instr->stage >= EX)){
-            instr->forward_reg.use_flag = true;
-            instr->forward_reg.reg= next_instr->alu_out;
-            instr->forward_reg.target = RS;
-            return;
-          }
-          else if(next_instr->opcode == LDW && next_instr->stage >=MEM ){
-            instr->forward_reg.use_flag = true;
-            instr->forward_reg.reg= next_instr->mdr;
-            instr->forward_reg.target = RS;
-            return;
-          }
-          else{
-          stall_pipeline(&mips->pipeline, i - ID);
-          return;}
-        }
-        break;
-      default:
-        break;
+    // Check if the current instruction is using the register that the next instruction will modify
+    bool is_hazard = (instr->type == R_TYPE && (instr->rs == check_reg || instr->rt == check_reg)) ||
+                     ((instr->type == I_TYPE_IMM || instr->type == I_TYPE_MEM) && instr->rs == check_reg);
+
+    if (is_hazard) {
+      // If pipeline forwarding is enabled and the next instruction is either R-type or immediate I-type and has reached the EX stage
+      if (mips->mode == PIPED_FWD && (next_instr->type == R_TYPE || next_instr->type == I_TYPE_IMM) && next_instr->stage >= EX) {
+        set_forward_reg(instr, check_reg, next_instr->alu_out);
+        return;
+
+      }
+      // If pipeline forwarding is enabled and the next instruction is LDW and has reached MEM stage
+      else if (mips->mode == PIPED_FWD && next_instr->opcode == LDW && next_instr->stage >= MEM) {
+        set_forward_reg(instr, check_reg, next_instr->mdr);
+        return;
+
+      } else {
+        stall_pipeline(&mips->pipeline, i - ID);
+        return;
+      }
     }
   }
 }

@@ -6,6 +6,10 @@
 #include "pipeline.h"
 #include "common.h"
 
+#ifdef DEBUG
+static const char *stage_names[] = {"IF", "ID", "EX", "MEM", "WB", "DONE"};
+#endif
+
 /**
  * @brief Initialize the pipeline
  *
@@ -50,8 +54,6 @@ Instruction *peek_pipeline_stage(Pipeline *p, PipelineStage stage) {
  * @param p Pipeline
  */
 void print_pipeline_state(Pipeline *p) {
-  const char *stage_names[] = {"IF", "ID", "EX", "MEM", "WB", "DONE"};
-
   for (int i = 0; i < NUM_STAGES; i++) {
     Instruction *instr = peek_pipeline_stage(p, i);
     if (instr != NULL) {
@@ -69,7 +71,6 @@ void print_pipeline_state(Pipeline *p) {
  * @param p Pipeline
  */
 void advance_pipeline(Pipeline *p) {
-  const char *stage_names[] = {"IF", "ID", "EX", "MEM", "WB", "DONE"};
   for (int i = NUM_STAGES - 1; i >= 0; i--) {
     Instruction *instr = peek_pipeline_stage(p, i);
     if (instr != NULL) {

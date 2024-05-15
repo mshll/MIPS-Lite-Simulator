@@ -1,6 +1,7 @@
 
 CC := gcc
-CFLAGS := -Wall -g -Iinclude
+CFLAGS := -Wall -Iinclude
+DEBUGFLAGS := -g -DDEBUG
 SRC_DIR := src
 OBJ_DIR := obj
 BIN_DIR := .
@@ -12,14 +13,17 @@ TARGET := mips_sim
 
 all: $(BIN_DIR)/$(TARGET)
 
+debug: CFLAGS += $(DEBUGFLAGS)
+debug: $(BIN_DIR)/$(TARGET)
+
 $(BIN_DIR)/$(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $^ -o $@
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c F
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -rf $(OBJ_DIR) $(BIN_DIR)/$(TARGET)
 
-.PHONY: all clean
+.PHONY: all debug clean F

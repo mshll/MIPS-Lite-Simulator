@@ -9,6 +9,12 @@
 #include "common.h"
 #include "pipeline.h"
 
+typedef enum {
+  NOT_PIPED,
+  PIPED_NO_FWD,
+  PIPED_FWD
+} Mode;
+
 typedef struct {
   uint32_t total;
   uint32_t arithmetic;
@@ -31,9 +37,10 @@ typedef struct {
   Pipeline pipeline;
   bool halt;
   InstructionCount counts;
+  Mode mode;
 } MIPSSim;
 
-void init_simulator(MIPSSim *mips);
+void init_simulator(MIPSSim *mips, Mode mode);
 void destroy_simulator(MIPSSim *mips);
 void load_memory(MIPSSim *mips, char *filename);
 void fetch_stage(MIPSSim *mips);
@@ -47,7 +54,7 @@ uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode);
 bool control_flow(MIPSSim *mips, Instruction *instr);
 void adjust_pc(MIPSSim *mips);
 
-void log_registers(MIPSSim *mips);
-void log_memory(MIPSSim *mips);
+void print_registers(MIPSSim *mips);
+void print_memory(MIPSSim *mips);
 
 #endif

@@ -2,6 +2,7 @@
 #define __COMMON_H__
 
 /*** includes ***/
+#include <getopt.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdarg.h>
@@ -10,8 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#define DEBUG  // Comment this line to disable debug output
 
 /*** macro(s), enum(s), struct(s) ***/
 #ifdef DEBUG
@@ -63,15 +62,17 @@ typedef enum {
   J_TYPE
 } InstructionType;
 
-typedef enum{
-  RT,
-  RS
+typedef enum {
+  RS,
+  RT
 } ForwardTarget;
-typedef struct{
+
+typedef struct {
   uint32_t reg;
-  bool use_flag;
+  bool is_forwarded;
   ForwardTarget target;
 } ForwardReg;
+
 typedef struct {
   uint32_t instruction;
   PipelineStage stage;
