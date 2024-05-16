@@ -217,6 +217,7 @@ void execute_stage(MIPSSim *mips) {
     return;
   }
 
+  if (mips->mode != NOT_PIPED) instr->alu_out = (int32_t)(mips->pc - 8) + (instr->imm << 2);
   int32_t rs = mips->registers[instr->rs].value;
   int32_t rt = mips->registers[instr->rt].value;
 
