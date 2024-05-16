@@ -24,7 +24,7 @@ typedef struct {
 } InstructionCount;
 
 typedef struct {
-  uint32_t value;
+  int32_t value;
   bool modified;
 } Value;
 
@@ -52,7 +52,7 @@ void writeback_stage(MIPSSim *mips);
 void process(MIPSSim *mips);
 
 uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode);
-bool control_flow(MIPSSim *mips, Instruction *instr);
+bool control_flow(MIPSSim *mips, Instruction *instr, int32_t rs, int32_t rt);
 void adjust_pc(MIPSSim *mips);
 
 void print_registers(MIPSSim *mips);

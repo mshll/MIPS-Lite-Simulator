@@ -20,13 +20,7 @@ void check_hazards(MIPSSim *mips, Instruction *instr);
  */
 void init_simulator(MIPSSim *mips, Mode mode) {
   memset(mips, 0, sizeof(MIPSSim));
-  memset(mips->registers, 0, sizeof(mips->registers));
-  memset(mips->memory, 0, sizeof(mips->memory));
   mips->mode = mode;
-  mips->memory_size = 0;
-  mips->pc = 0;
-  mips->clock = 0;
-  mips->halt = false;
   mips->counts = (InstructionCount){0};
   init_pipeline(&mips->pipeline, !!mode);
 }
@@ -72,7 +66,7 @@ void load_memory(MIPSSim *mips, char *filename) {
  * @param mips  MIPS simulator
  */
 void fetch_stage(MIPSSim *mips) {
-  if (peek_pipeline_stage(&mips->pipeline, IF) == NULL && (mips->pc / 4 < mips->memory_size)) {
+  if (!peek_pipeline_stage(&mips->pipeline, IF) && (mips->pc / 4 < mips->memory_size) && !mips->halt) {
     Instruction *instr = (Instruction *)malloc(sizeof(Instruction));
     memset(instr, 0, sizeof(Instruction));
     instr->instruction = mips->memory[mips->pc / 4].value;
@@ -136,13 +130,13 @@ void decode_stage(MIPSSim *mips) {
     instr->rd = (instr->instruction >> 11) & INSTR_MASK;
   } else {
     instr->imm = (int16_t)(instr->instruction & 0xFFFF);
-    instr->alu_out = mips->pc + (instr->imm << 2);
+    instr->alu_out = (int32_t)(mips->pc - 4) + (instr->imm << 2);
   }
 
   if (mips->mode != NOT_PIPED) check_hazards(mips, instr);
 
-  // LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
-  //     instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
+  LOG("DECODED: [Instruction %08x] Type: %d, Opcode: %d, Rs: %d, Rt: %d, Rd: %d, Imm: %d, ALU: %d\n", instr->instruction, instr->type, instr->opcode,
+      instr->rs, instr->rt, instr->rd, instr->imm, instr->alu_out);
 }
 
 /**
@@ -186,22 +180,22 @@ uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode) {
  * @param instr Instruction
  * @return true if the branch is taken, false otherwise
  */
-bool control_flow(MIPSSim *mips, Instruction *instr) {
+bool control_flow(MIPSSim *mips, Instruction *instr, int32_t rs, int32_t rt) {
   switch (instr->opcode) {
     case BZ:  // Branch if zero
-      if (mips->registers[instr->rs].value == 0) {
-        mips->pc = instr->alu_out - 4;
+      if (rs == 0) {
+        mips->pc = instr->alu_out;
         return true;
       }
       break;
     case BEQ:  // Branch if equal
-      if (mips->registers[instr->rs].value == mips->registers[instr->rt].value) {
-        mips->pc = instr->alu_out - 4;
+      if (rs == rt) {
+        mips->pc = instr->alu_out;
         return true;
       }
       break;
     case JR:  // Jump register
-      mips->pc = mips->registers[instr->rs].value;
+      mips->pc = rs;
       return true;
     case HALT:  // Halt program
       mips->halt = true;
@@ -223,8 +217,8 @@ void execute_stage(MIPSSim *mips) {
     return;
   }
 
-  uint32_t rs = mips->registers[instr->rs].value;
-  uint32_t rt = mips->registers[instr->rt].value;
+  int32_t rs = mips->registers[instr->rs].value;
+  int32_t rt = mips->registers[instr->rt].value;
 
   // Forward the register value to either rs or rt if it is forwarded
   if (instr->forward_reg.is_forwarded) {
@@ -246,7 +240,7 @@ void execute_stage(MIPSSim *mips) {
       instr->alu_out = mips->registers[instr->rs].value + instr->imm;
       break;
     case J_TYPE:  // J-Type instructions (BZ, BEQ, JR, HALT)
-      bool branch_taken = control_flow(mips, instr);
+      bool branch_taken = control_flow(mips, instr, rs, rt);
       // If branch is taken, flush the pipeline
       if (branch_taken) {
         flush_pipeline(&mips->pipeline, EX);
@@ -338,6 +332,9 @@ void process(MIPSSim *mips) {
   fetch_stage(mips);
   print_pipeline_state(&mips->pipeline);
   mips->done = advance_pipeline(&mips->pipeline);
+
+  // If not pipelined and the PC is within the memory bounds, keep processing
+  if (mips->mode == NOT_PIPED && mips->pc / 4 < mips->memory_size) mips->done = false;
 }
 
 void print_memory(MIPSSim *mips) {
@@ -373,7 +370,7 @@ void print_registers(MIPSSim *mips) {
 void adjust_pc(MIPSSim *mips) {
   if (mips->mode == NOT_PIPED) return;
 
-  for (int i = 0; i <= EX; i++) {
+  for (int i = 0; i < EX; i++) {
     Instruction *instr = peek_pipeline_stage(&mips->pipeline, i);
     if (instr != NULL) {
       mips->pc -= 4;
@@ -401,7 +398,9 @@ void check_hazards(MIPSSim *mips, Instruction *instr) {
 
     // Check if the current instruction is using the register that the next instruction will modify
     bool is_hazard = (instr->type == R_TYPE && (instr->rs == check_reg || instr->rt == check_reg)) ||
-                     ((instr->type == I_TYPE_IMM || instr->type == I_TYPE_MEM) && instr->rs == check_reg);
+                     ((instr->type == I_TYPE_IMM || instr->type == I_TYPE_MEM) && instr->rs == check_reg) ||
+                     (instr->opcode == BEQ && (instr->rs == check_reg || instr->rt == check_reg)) ||
+                     (instr->type == J_TYPE && instr->rs == check_reg);
 
     if (is_hazard) {
       // If pipeline forwarding is enabled and the next instruction is either R-type or immediate I-type and has reached the EX stage

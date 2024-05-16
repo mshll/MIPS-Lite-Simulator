@@ -115,8 +115,9 @@ void flush_pipeline(Pipeline *p, PipelineStage stage) {
 
   for (int i = stage - 1; i >= 0; i--) {
     if (p->stages[i] != NULL) {
-      free(p->stages[i]);
-      p->stages[i] = NULL;
+      // free(p->stages[i]);
+      // p->stages[i] = NULL;
+      p->stages[i]->stage = DONE;
     }
   }
 }
@@ -128,6 +129,7 @@ void flush_pipeline(Pipeline *p, PipelineStage stage) {
  * @param n Number of cycles to stall
  */
 void stall_pipeline(Pipeline *p, int n) {
+  if (n <= 0) return;
   p->stall_cycles = n;
   p->total_stalls++;
   LOG("===> Stalling pipeline for %d cycles\n", n);

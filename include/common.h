@@ -68,13 +68,13 @@ typedef enum {
 } ForwardTarget;
 
 typedef struct {
-  uint32_t reg;
+  int32_t reg;
   bool is_forwarded;
   ForwardTarget target;
 } ForwardReg;
 
 typedef struct {
-  uint32_t instruction;
+  int32_t instruction;
   PipelineStage stage;
   InstructionType type;
   Opcode opcode;
@@ -82,8 +82,8 @@ typedef struct {
   uint8_t rt;
   uint8_t rd;
   int16_t imm;
-  uint32_t alu_out;
-  uint32_t mdr;
+  int32_t alu_out;
+  int32_t mdr;
   ForwardReg forward_reg;
 } Instruction;
 
