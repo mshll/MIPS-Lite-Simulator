@@ -1,0 +1,29 @@
+Memory loaded from file: 15.txt
+-> CLK: 1, PC: 0
+IF: 3c220064 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 2, PC: 4
+DECODED: [Instruction 3c220064] Type: 3, Opcode: 15, Rs: 1, Rt: 2, Rd: 0, Imm: 100, ALU: 404
+IF: 3c6100c8 	ID: 3c220064 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 3, PC: 8
+IF: -------- 	ID: -------- 	EX: 3c220064 	MEM: -------- 	WB: -------- 	
+-> CLK: 4, PC: 400
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: 3c220064 	WB: -------- 	
+-> CLK: 5, PC: 400
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: 3c220064 	
+===> Instruction completed: 3c220064
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: -------- 	
+======== Simulation complete ========
+Total clock cycles: 5
+Final PC: 400
+Total Stalls: 0
+Instruction counts:
+\ Total: 1
+\ Arithmetic: 0
+\ Logical: 0
+\ Memory: 0
+\ Control: 1
+=====================================
+Registers:
+
+Memory:
+

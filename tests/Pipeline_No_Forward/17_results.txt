@@ -1,0 +1,26 @@
+Memory loaded from file: 17.txt
+-> CLK: 1, PC: 0
+IF: 44000000 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 2, PC: 4
+DECODED: [Instruction 44000000] Type: 3, Opcode: 17, Rs: 0, Rt: 0, Rd: 0, Imm: 0, ALU: 4
+IF: 44000000 	ID: 44000000 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 3, PC: 8
+IF: -------- 	ID: -------- 	EX: 44000000 	MEM: -------- 	WB: -------- 	
+======== Simulation complete ========
+Total clock cycles: 3
+Final PC: 4
+Total Stalls: 0
+Instruction counts:
+\ Total: 1
+\ Arithmetic: 0
+\ Logical: 0
+\ Memory: 0
+\ Control: 1
+=====================================
+Registers:
+
+Memory:
+
+
+
+PROGRAM HALTED

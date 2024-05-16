@@ -1,0 +1,41 @@
+Memory loaded from file: 8.txt
+-> CLK: 1, PC: 0
+IF: 20221808 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 2, PC: 4
+DECODED: [Instruction 20221808] Type: 0, Opcode: 8, Rs: 1, Rt: 2, Rd: 3, Imm: 0, ALU: 0
+IF: 20622008 	ID: 20221808 	EX: -------- 	MEM: -------- 	WB: -------- 	
+-> CLK: 3, PC: 8
+===> Stalling pipeline for 2 cycles
+DECODED: [Instruction 20622008] Type: 0, Opcode: 8, Rs: 3, Rt: 2, Rd: 4, Imm: 0, ALU: 0
+IF: -------- 	ID: 20622008 	EX: 20221808 	MEM: -------- 	WB: -------- 	
+-> CLK: 4, PC: 8
+===> Stalling pipeline for 1 cycles
+DECODED: [Instruction 20622008] Type: 0, Opcode: 8, Rs: 3, Rt: 2, Rd: 4, Imm: 0, ALU: 0
+IF: -------- 	ID: 20622008 	EX: -------- 	MEM: 20221808 	WB: -------- 	
+-> CLK: 5, PC: 8
+DECODED: [Instruction 20622008] Type: 0, Opcode: 8, Rs: 3, Rt: 2, Rd: 4, Imm: 0, ALU: 0
+IF: -------- 	ID: 20622008 	EX: -------- 	MEM: -------- 	WB: 20221808 	
+===> Instruction completed: 20221808
+-> CLK: 6, PC: 8
+IF: -------- 	ID: -------- 	EX: 20622008 	MEM: -------- 	WB: -------- 	
+-> CLK: 7, PC: 8
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: 20622008 	WB: -------- 	
+-> CLK: 8, PC: 8
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: 20622008 	
+===> Instruction completed: 20622008
+IF: -------- 	ID: -------- 	EX: -------- 	MEM: -------- 	WB: -------- 	
+======== Simulation complete ========
+Total clock cycles: 8
+Final PC: 8
+Total Stalls: 2
+Instruction counts:
+\ Total: 2
+\ Arithmetic: 0
+\ Logical: 2
+\ Memory: 0
+\ Control: 0
+=====================================
+Registers:
+[ 3:   0] [ 4:   0] 
+Memory:
+
