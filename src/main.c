@@ -17,17 +17,14 @@ int main(int argc, char* argv[]) {
   Mode mode;
   process_args(argc, argv, &filename, &mode);
 
-  MIPSSim* mips = (MIPSSim*)malloc(sizeof(MIPSSim));
+  MIPSSim* mips = malloc(sizeof(MIPSSim));
   init_simulator(mips, mode);
   load_memory(mips, filename);
 
   while (!mips->done && !mips->halt) {
-    // LOG("Clock cycle: %d\n", mips->clock);
     process(mips);
   }
-
-  print_pipeline_state(&mips->pipeline);
-  adjust_pc(mips);
+  correct_pc(mips);
 
   printf("======== Simulation complete ========\n");
   printf("Total clock cycles: %d\n", mips->clock);

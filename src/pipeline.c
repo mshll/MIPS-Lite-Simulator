@@ -21,7 +21,7 @@ void init_pipeline(Pipeline *p, bool is_pipelined) {
     p->stages[i] = NULL;
   }
   p->is_pipelined = is_pipelined;
-  p->stall_cycles = 0;
+  p->is_stalled = false;
   p->total_stalls = 0;
 }
 
@@ -82,7 +82,7 @@ bool advance_pipeline(Pipeline *p) {
         free(p->stages[i]);
         p->stages[i] = NULL;
         // print_pipeline_state(p);
-      } else if (p->stall_cycles > 0 && instr->stage <= ID) {
+      } else if (p->is_stalled && instr->stage <= ID) {
         is_empty = false;
         // LOG("===> Stalling %s: %08x\n", stage_names[i], instr->instruction);
       } else {
@@ -97,10 +97,7 @@ bool advance_pipeline(Pipeline *p) {
     }
   }
 
-  if (p->stall_cycles > 0) {
-    p->stall_cycles--;
-  }
-
+  p->is_stalled = false;
   return is_empty;
 }
 
@@ -123,14 +120,11 @@ void flush_pipeline(Pipeline *p, PipelineStage stage) {
 }
 
 /**
- * @brief Stall the pipeline for a given number of cycles
+ * @brief Stall the pipeline in the current cycle
  *
  * @param p Pipeline
- * @param n Number of cycles to stall
  */
-void stall_pipeline(Pipeline *p, int n) {
-  if (n <= 0) return;
-  p->stall_cycles = n;
+void stall_pipeline(Pipeline *p) {
+  p->is_stalled = true;
   p->total_stalls++;
-  LOG("===> Stalling pipeline for %d cycles\n", n);
 }

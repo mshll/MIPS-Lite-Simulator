@@ -53,7 +53,7 @@ void process(MIPSSim *mips);
 
 uint32_t perform_operation(uint32_t rs, uint32_t rt, Opcode opcode);
 bool control_flow(MIPSSim *mips, Instruction *instr, int32_t rs, int32_t rt);
-void adjust_pc(MIPSSim *mips);
+void correct_pc(MIPSSim *mips);
 
 void print_registers(MIPSSim *mips);
 void print_memory(MIPSSim *mips);

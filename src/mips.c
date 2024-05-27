@@ -10,7 +10,7 @@
 /* helper functions prototypes */
 void print_memory(MIPSSim *mips);
 void print_registers(MIPSSim *mips);
-void adjust_pc(MIPSSim *mips);
+void correct_pc(MIPSSim *mips);
 void check_hazards(MIPSSim *mips, Instruction *instr);
 
 /**
@@ -368,7 +368,12 @@ void print_registers(MIPSSim *mips) {
   printf("\n");
 }
 
-void adjust_pc(MIPSSim *mips) {
+/**
+ * @brief Correct the PC value if there are instructions in the pipeline that have not been executed
+ *
+ * @param mips  MIPS simulator
+ */
+void correct_pc(MIPSSim *mips) {
   if (mips->mode == NOT_PIPED) return;
 
   for (int i = 0; i < EX; i++) {
@@ -391,7 +396,7 @@ void set_forward_reg(Instruction *instr, int8_t check_reg, int reg) {
  * @param instr Instruction
  */
 void check_hazards(MIPSSim *mips, Instruction *instr) {
-  for (int i = EX; i < NUM_STAGES; i++) {
+  for (int i = EX; i < WB; i++) {
     Instruction *next_instr = peek_pipeline_stage(&mips->pipeline, i);
     if (next_instr == NULL || next_instr->type == J_TYPE) continue;
 
@@ -416,7 +421,7 @@ void check_hazards(MIPSSim *mips, Instruction *instr) {
         return;
 
       } else {
-        stall_pipeline(&mips->pipeline, WB - i);
+        stall_pipeline(&mips->pipeline);
         return;
       }
     }
