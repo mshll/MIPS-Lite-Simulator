@@ -23,6 +23,7 @@ void init_simulator(MIPSSim *mips, Mode mode) {
   mips->mode = mode;
   mips->counts = (InstructionCount){0};
   init_pipeline(&mips->pipeline, !!mode);
+  mips->clock = 1;
 }
 
 /**
@@ -245,6 +246,7 @@ void execute_stage(MIPSSim *mips) {
       // If branch is taken, flush the pipeline
       if (branch_taken) {
         flush_pipeline(&mips->pipeline, EX);
+        mips->clock++;
       }
       break;
     default:
@@ -323,7 +325,6 @@ void writeback_stage(MIPSSim *mips) {
  * @param mips  MIPS simulator
  */
 void process(MIPSSim *mips) {
-  mips->clock++;
   LOG("-> CLK: %d, PC: %d\n", mips->clock, mips->pc);
   writeback_stage(mips);
   memory_stage(mips);
@@ -331,7 +332,6 @@ void process(MIPSSim *mips) {
   if (mips->halt) return;
   decode_stage(mips);
   fetch_stage(mips);
-  print_pipeline_state(&mips->pipeline);
   mips->done = advance_pipeline(&mips->pipeline);
 
   // If not pipelined and the PC is within the memory bounds, keep processing

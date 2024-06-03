@@ -23,6 +23,8 @@ int main(int argc, char* argv[]) {
 
   while (!mips->done && !mips->halt) {
     process(mips);
+    mips->clock++;
+    print_pipeline_state(&mips->pipeline);
   }
   correct_pc(mips);
 
